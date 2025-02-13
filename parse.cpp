@@ -1,0 +1,118 @@
+#include <iostream> //standard input & output std::cout, stdcerr
+#include <fstream> // for file stream operation, read the ELF file
+#include <cstring> // for memory comparison functions (std::memcmp)
+#include <cstdint> //type fixes uint64_t
+#include <vector>
+
+struct ElfHeader {
+  unsigned char e_ident[16];
+  uint16_t  e_type;
+  uint16_t e_machine;
+  uint32_t e_version;
+  uint64_t e_entry; // program entry
+  uint64_t e_phoff; 
+  uint64_t e_shoff;
+  uint32_t e_flags;
+  uint16_t e_ehsize;
+  uint16_t e_phentsize;
+  uint16_t e_phnum;
+  uint16_t e_shentsize;
+  uint16_t e_shnum;
+  uint16_t e_shstrndx;
+};
+
+struct ElfSegment{
+  uint32_t p_type;
+  uint32_t p_flags;
+  uint64_t p_offset;
+  uint64_t p_vaddr;
+  uint64_t p_paddr;
+  uint64_t p_filesz;
+  uint64_t p_memsz;
+  uint64_t p_align;
+};
+
+struct ElfSymbol {
+    uint32_t st_name;
+    uint8_t st_info;
+    uint8_t st_other;
+    uint16_t st_shndx;
+    uint64_t st_value;
+    uint64_t st_size;
+};
+
+
+// Fonction pour lire l'en-tête du ELF
+bool readElfHeader(std::ifstream& file, ElfHeader& header) {
+  file.read(reinterpret_cast<char*>(&header), sizeof(ElfHeader));
+  return file.good();
+}
+
+// Fonction pour vérifier si le fichier est un ELF
+bool isElfFile(const ElfHeader& header){
+  const unsigned char elfMagic[] = {0x7f, 'E', 'L', 'F'};
+  return std::memcmp(header.e_ident, elfMagic, 4) == 0;
+} 
+
+// Fonction pour lire les segments
+bool readSegments(std::ifstream& file, const ElfHeader& header, std::vector<ElfSegment>& segments) {
+  file.seekg(header.e_phoff);
+
+  for (uint16_t i = 0; i < header.e_phnum; i++){
+    ElfSegment segment;
+    file.read(reinterpret_cast<char*>(&segment), sizeof(ElfSegment));
+
+    if (!file.good()){
+      return false;
+    }
+
+    segments.push_back(segment);
+  }
+  return true;
+}
+
+
+int main(int argc, char* argv[]){
+  if(argc != 2) {
+    std::cerr << "Usage: "<< argv[0]<< " <elf-file>" << std::endl;
+    return 1;
+  }
+
+  std::ifstream file(argv[1], std::ios::binary);
+
+  if(!file){
+    std::cerr << "Error: Could not open file " << argv[1] << std::endl;
+    return 1;;
+  }
+
+  ElfHeader header;
+  if(!readElfHeader(file, header)){
+    std::cerr<< "Error: Could not read ELF header" << std::endl;
+    return 1;
+  }
+
+  if(!isElfFile(header)){
+    std::cerr << "Error: file is not an ELF file" << std::endl;
+    return 1;
+  }
+
+  std::cout << "Elf file detected!" << std::endl;
+  std::cout << "Entry point: 0x" << std::hex << header.e_entry << std::endl;
+
+  
+  std::vector<ElfSegment> segments;
+  if(!readSegments(file, header, segments)){
+    std::cerr << "Error: Could not read segments" << std::endl;
+    return 1;
+  }
+
+  std::cout << "Segments:" << std::endl;
+  for (const auto& segment : segments) {
+    std::cout << " Type: " << segment.p_type << " Offset 0x" << segment.p_offset 
+      << " VirtualAddr: 0x" << segment.p_vaddr << " FileSize: " << segment.p_filesz
+      << " MemSize: " << segment.p_memsz <<" Flags: " << segment.p_flags << std::endl;
+  }
+  
+  return 0;
+}
+
