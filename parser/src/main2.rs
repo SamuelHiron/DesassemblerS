@@ -9,33 +9,6 @@ const PF_EXEC: u32 = 0x1;
 const PF_WRITE: u32 = 0x2;
 const PF_READ: u32 = 0x4;
 
-struct ElfHeader {
-    e_ident: [u8; 16],
-    e_type: u16,
-    e_machine: u16,
-    e_version: u32,
-    e_entry: u64, // address of the program's entry point
-    e_phoff: u64,
-    e_shoff: u64,
-    e_flags: u32,
-    e_ehsize: u16,
-    e_phentsize: u16,
-    e_phnum: u16,
-    e_shentsize: u16,
-    e_shnum: u16,
-    e_shstrndx: u16,
-}
-
-struct ProgramHeader { // segments able for  64 Bits
-    p_type: u32,
-    p_flags: u32,
-    p_offset: u64,
-    p_vaddr: u64,
-    p_paddr: u64,
-    p_filesz: u64,
-    p_memsz: u64,
-    p_align: u64,
-}
 
 fn is_elf_file(contents: &[u8]) -> bool {
     if 4 > contents.len() {
