@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/pe_authenticode_check.dir/pe_authenticode_check.cpp.o -o pe_authenticode_check  ../../libLIEF.a

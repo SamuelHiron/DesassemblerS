@@ -1,0 +1,13 @@
+# Target labels
+ lief_frozen
+# Source files and their labels
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/CMakeFiles/lief_frozen
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/CMakeFiles/lief_frozen.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/CMakeFiles/lief_frozen-complete.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_frozen-prefix/src/lief_frozen-stamp/lief_frozen-build.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_frozen-prefix/src/lief_frozen-stamp/lief_frozen-configure.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_frozen-prefix/src/lief_frozen-stamp/lief_frozen-download.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_frozen-prefix/src/lief_frozen-stamp/lief_frozen-install.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_frozen-prefix/src/lief_frozen-stamp/lief_frozen-mkdir.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_frozen-prefix/src/lief_frozen-stamp/lief_frozen-patch.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_frozen-prefix/src/lief_frozen-stamp/lief_frozen-update.rule

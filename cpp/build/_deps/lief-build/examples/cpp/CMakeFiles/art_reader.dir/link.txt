@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/art_reader.dir/art_reader.cpp.o -o art_reader  ../../libLIEF.a

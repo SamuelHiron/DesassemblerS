@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/desassam.dir/main.cpp.o -o desassam  _deps/lief-build/libLIEF.a

@@ -1,0 +1,13 @@
+# Target labels
+ lief_span
+# Source files and their labels
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/CMakeFiles/lief_span
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/CMakeFiles/lief_span.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/CMakeFiles/lief_span-complete.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_span-prefix/src/lief_span-stamp/lief_span-build.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_span-prefix/src/lief_span-stamp/lief_span-configure.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_span-prefix/src/lief_span-stamp/lief_span-download.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_span-prefix/src/lief_span-stamp/lief_span-install.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_span-prefix/src/lief_span-stamp/lief_span-mkdir.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_span-prefix/src/lief_span-stamp/lief_span-patch.rule
+/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_span-prefix/src/lief_span-stamp/lief_span-update.rule

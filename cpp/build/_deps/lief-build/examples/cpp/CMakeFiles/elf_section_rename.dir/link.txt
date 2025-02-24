@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/elf_section_rename.dir/elf_section_rename.cpp.o -o elf_section_rename  ../../libLIEF.a

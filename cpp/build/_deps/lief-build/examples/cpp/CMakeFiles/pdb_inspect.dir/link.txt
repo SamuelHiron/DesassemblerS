@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/pdb_inspect.dir/pdb_inspect.cpp.o -o pdb_inspect  ../../libLIEF.a

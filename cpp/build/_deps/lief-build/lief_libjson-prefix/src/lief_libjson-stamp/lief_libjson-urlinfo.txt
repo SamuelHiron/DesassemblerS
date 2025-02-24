@@ -1,0 +1,12 @@
+# This is a generated file and its contents are an internal implementation detail.
+# The download step will be re-executed if anything in this file changes.
+# No other meaning or use of this file is supported.
+
+method=url
+command=/usr/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_libjson-prefix/src/lief_libjson-stamp/verify-lief_libjson.cmake;COMMAND;/usr/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_libjson-prefix/src/lief_libjson-stamp/extract-lief_libjson.cmake
+source_dir=/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_libjson-prefix/src/lief_libjson
+work_dir=/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_libjson-prefix/src
+url(s)=/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-src/third-party//json-3.11.2.zip
+hash=SHA256=62b1d12b8c7e4afcf96827d05426ca6d9184b9eefdfac512dd533726b98ad8f7
+      no_extract=
+

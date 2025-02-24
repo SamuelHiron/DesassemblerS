@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/CMakeFiles/lief_utfcpp"
+		},
+		{
+			"file" : "/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/CMakeFiles/lief_utfcpp.rule"
+		},
+		{
+			"file" : "/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/CMakeFiles/lief_utfcpp-complete.rule"
+		},
+		{
+			"file" : "/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_utfcpp-prefix/src/lief_utfcpp-stamp/lief_utfcpp-build.rule"
+		},
+		{
+			"file" : "/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_utfcpp-prefix/src/lief_utfcpp-stamp/lief_utfcpp-configure.rule"
+		},
+		{
+			"file" : "/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_utfcpp-prefix/src/lief_utfcpp-stamp/lief_utfcpp-download.rule"
+		},
+		{
+			"file" : "/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_utfcpp-prefix/src/lief_utfcpp-stamp/lief_utfcpp-install.rule"
+		},
+		{
+			"file" : "/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_utfcpp-prefix/src/lief_utfcpp-stamp/lief_utfcpp-mkdir.rule"
+		},
+		{
+			"file" : "/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_utfcpp-prefix/src/lief_utfcpp-stamp/lief_utfcpp-patch.rule"
+		},
+		{
+			"file" : "/home/samuel/Documents/DesassemblerS/cpp/build/_deps/lief-build/lief_utfcpp-prefix/src/lief_utfcpp-stamp/lief_utfcpp-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"lief_utfcpp"
+		],
+		"name" : "lief_utfcpp"
+	}
+}
