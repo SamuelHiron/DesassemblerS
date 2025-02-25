@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/disassembler.dir/disassembler.cpp.o -o disassembler  ../../libLIEF.a

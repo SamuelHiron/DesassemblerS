@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/dex_reader.dir/dex_reader.cpp.o -o dex_reader  ../../libLIEF.a

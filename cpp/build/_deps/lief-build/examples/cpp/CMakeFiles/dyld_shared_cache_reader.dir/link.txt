@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/dyld_shared_cache_reader.dir/dyld_shared_cache_reader.cpp.o -o dyld_shared_cache_reader  ../../libLIEF.a

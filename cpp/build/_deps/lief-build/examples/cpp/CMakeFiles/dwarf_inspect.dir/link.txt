@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/dwarf_inspect.dir/dwarf_inspect.cpp.o -o dwarf_inspect  ../../libLIEF.a

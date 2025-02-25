@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/objc_inspect.dir/objc_inspect.cpp.o -o objc_inspect  ../../libLIEF.a

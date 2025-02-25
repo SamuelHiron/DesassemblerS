@@ -6,7 +6,6 @@ std::map<size_t, u_int8_t> binary_contents;
 int explore_address(size_t address){
   std::cout << "Exploring address: 0x" << std::hex << address << std::dec << std::endl;
   // Get the binary
-  get_insturctions(address);
   return 0;
 }
 

@@ -13,14 +13,14 @@ set(CMAKE_CXX_STANDARD 23) # project uses C++23,
 set(CMAKE_CXX_STANDARD_REQUIRED True) # and this standard is required.
 
 
-# FetchContent_Declare(
-#     fmt
-#     GIT_REPOSITORY https://github.com/fmtlib/fmt
-#     GIT_TAG        0c9fce2ffefecfdce794e1859584e25877b7b592
-#     FIND_PACKAGE_ARGS
-# ) # 11.0.2
-# FetchContent_MakeAvailable(fmt)
-# message(STATUS "Found fmt version ${fmt_VERSION}")
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt
+    GIT_TAG        0c9fce2ffefecfdce794e1859584e25877b7b592
+    FIND_PACKAGE_ARGS
+) # 11.0.2
+FetchContent_MakeAvailable(fmt)
+message(STATUS "Found fmt version ${fmt_VERSION}")
 
 
 # if(ENABLE_TESTING)
@@ -44,6 +44,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(LIEF)
 
 target_link_libraries(desassam PRIVATE 
-    #fmt:fmt
+    fmt:fmt
     LIEF::LIEF
 ) # link the executable with the LIEF library

@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/c_pe_reader.dir/pe_reader.c.o -o pe_reader  ../../libLIEF.a

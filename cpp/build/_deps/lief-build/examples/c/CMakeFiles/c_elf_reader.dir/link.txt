@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/c_elf_reader.dir/elf_reader.c.o -o elf_reader  ../../libLIEF.a

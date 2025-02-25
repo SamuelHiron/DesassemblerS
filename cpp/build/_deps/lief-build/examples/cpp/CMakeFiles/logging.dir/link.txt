@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/logging.dir/logging.cpp.o -o logging  ../../libLIEF.a
