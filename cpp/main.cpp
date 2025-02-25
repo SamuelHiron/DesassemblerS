@@ -78,7 +78,8 @@ int main(int argc, char** argv) {
     std::cout << "Functions found in binary:\n";
     for (const auto& function : binary->functions()) {
         std::cout << "  " << function.name() << " address: 0x" << std::hex << function.address() << std::dec << std::endl;// std::hex and std::dec are used to switch between hex and decimal
-        if (function.name() == "main" || function.name() == "foo" || function.name() == "bar") {
+        if (function.name()[0] != '_' && function.name()!= "frame_dummy" && function.name() != "register_tm_clones" && function.name() != "deregister_tm_clones") {
+          std::cout<< "Adding function to queue "<< function.name() << std::endl;
           queue.push(function.address());
         } 
     }
