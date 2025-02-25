@@ -1,23 +1,48 @@
 #include <iostream>
+#include <capstone/capstone.h>
 #include "LIEF/LIEF.hpp"
 #include <queue>
 std::map<size_t, u_int8_t> binary_contents;
 
-int explore_address(size_t address){
-  std::cout << "Exploring address: 0x" << std::hex << address << std::dec << std::endl;
-  // Get the binary
-  return 0;
-}
+struct CSH {
+  csh handle;
 
-int get_insturctions(size_t address){
+  CSH(){ //Constructeur
+    auto is_open = cs_open(CS_ARCH_X86, CS_MODE_64, &handle); // On ouvre une session pour désassemebler du x86-64, result dans handle
+    assert(is_open== CS_ERR_OK); // Capstone c'est bien initialisé
+    cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON); // info détaillée sur désassemblage
+  }
+
+  ~CSH(){ //Destructeur
+    cs_close(&handle); // On ferme la session
+  }
+
+  operator csh&() { return handle; } //convertir implicitement un objet CSH en une référence de type csh&
+};
+
+
+int explore_address_and_get_instruction(size_t address, std::queue<size_t>& queue){
+  std::cout << "\nExploring address: 0x" << std::hex << address << std::dec << std::endl;
+
   std::array<u_int8_t, 16> bytes;
   for(size_t i = 0; i < 16; i++){
     bytes[i] = binary_contents[address + i];
   }
   // instruction de max 16 octets chargée dans le tableau bytes
-  // On peut maintenant décoder l'instruction 
+  // On peut maintenant décoder l'instruction avec Capstone
+  cs_insn* insn;
+  size_t count = cs_disasm(CSH(), bytes.data(), bytes.size(), address, 0, &insn);
+  if(count > 0){
+    std::cout << "0x" << std::hex << insn[0].address << std::dec << ": " << insn[0].mnemonic << " " << insn[0].op_str <<std::endl;
+    std::cout << "Bytes: "<< std::hex << insn[0].size << std::dec << std::endl;
+    // std::cout << "0x" << std::hex << insn[0].address << std::dec << ": " << insn[0].mnemonic << " " << insn[0].op_str <<std::endl;
+    queue.push(address + insn[0].size);
+    cs_free(insn, count);
+  }
   return 0;
 }
+
+
 
 
 int main(int argc, char** argv) {
@@ -59,11 +84,14 @@ int main(int argc, char** argv) {
     }
     std::map<size_t, size_t> addr2block; //Pour ne traiter qu'une seule fois la même adresse
 
+    CSH handle; //Capstone Handle
+
+    std::cout << queue.size() << " functions to explore" << std::endl;
     while(!queue.empty()){
       auto address = queue.front();
       queue.pop();
-      if (addr2block.count(address)){
-        explore_address(address);
+      if (!addr2block.count(address)){
+        explore_address_and_get_instruction(address, queue);
         addr2block[address] = 1;
       }
     }

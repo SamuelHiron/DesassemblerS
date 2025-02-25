@@ -13,14 +13,14 @@ set(CMAKE_CXX_STANDARD 23) # project uses C++23,
 set(CMAKE_CXX_STANDARD_REQUIRED True) # and this standard is required.
 
 
-FetchContent_Declare(
-    fmt
-    GIT_REPOSITORY https://github.com/fmtlib/fmt
-    GIT_TAG        0c9fce2ffefecfdce794e1859584e25877b7b592
-    FIND_PACKAGE_ARGS
-) # 11.0.2
-FetchContent_MakeAvailable(fmt)
-message(STATUS "Found fmt version ${fmt_VERSION}")
+# FetchContent_Declare(
+#     fmt
+#     GIT_REPOSITORY https://github.com/fmtlib/fmt
+#     GIT_TAG        1c9fce2ffefecfdce794e1859584e25877b7b592
+#     FIND_PACKAGE_ARGS
+# ) # 12.0.2
+# FetchContent_MakeAvailable(fmt)
+# message(STATUS "Found fmt version ${fmt_VERSION}")
 
 
 # if(ENABLE_TESTING)
@@ -29,7 +29,13 @@ message(STATUS "Found fmt version ${fmt_VERSION}")
 #     add_subdirectory(test)
 # endif()
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(CAPSTONE REQUIRED capstone)
+message(STATUS "Found Capstone version ${CAPSTONE_VERSION}")
 
+# Ajouter les chemins d'accès aux en-têtes de Capstone
+include_directories(${CAPSTONE_INCLUDE_DIRS})
+link_directories(${CAPSTONE_LIBRARY_DIRS})
 
 
 add_executable(desassam main.cpp) # executable_name: triskel-gui, source file main.cppi
@@ -44,6 +50,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(LIEF)
 
 target_link_libraries(desassam PRIVATE 
-    fmt:fmt
+    # fmt:fmt
     LIEF::LIEF
-) # link the executable with the LIEF library
+    ${CAPSTONE_LIBRARIES}
+)# link the executable to the LIEF library, format library and capstone 
