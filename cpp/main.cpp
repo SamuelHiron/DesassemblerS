@@ -143,7 +143,8 @@ struct RecursiveDescent {
         }
 
         // int i =0; si boucle infinie
-        while (!blocks[index_block].end) {  // par défaut initialisé à false
+        while (!blocks[index_block].end && !addr2block.count(current_address)) {  // par défaut initialisé à false
+            // pour etre sur refait pas une lecture de bloc
  
             // if (i == 5) {
             //   blocks[index_block]end = true;
@@ -151,9 +152,7 @@ struct RecursiveDescent {
             // i++;
             addr2block[current_address] = index_block;
 
-            std::cout << "Exploring address: 0x" << std::hex << current_address
-                      << std::dec << std::endl;
-            // On décode 1 instruction
+            std::cout << "Exploring address: 0x" << std::hex << current_address << std::dec << std::endl; //On décode 1 instruction
            std::array<u_int8_t, 16> bytes;
             for (size_t i = 0; i < 16; i++) {
                 bytes[i] = binary_contents[current_address + i];
