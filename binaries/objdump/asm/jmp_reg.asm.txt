@@ -1,0 +1,15 @@
+
+elf/jmp_reg:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000401000 <_start>:
+  401000:	b8 0f 10 40 00       	mov    eax,0x40100f
+  401005:	bb 02 00 00 00       	mov    ebx,0x2
+  40100a:	39 d8                	cmp    eax,ebx
+  40100c:	67 ff 20             	jmp    QWORD PTR [eax]
+
+000000000040100f <exit>:
+  40100f:	b8 01 00 00 00       	mov    eax,0x1
+  401014:	cd 80                	int    0x80

@@ -14,7 +14,7 @@ struct CSH {
     CSH() {  // Constructeur
         auto is_open =
             cs_open(CS_ARCH_X86, CS_MODE_64,
-                    &handle);  // On ouvre une session pour désassemebler du
+                    &handle);  // On ouvre une session pour désassembler du
                                // x86-64, result dans handle
         assert(is_open == CS_ERR_OK);  // Capstone c'est bien initialisé
         cs_option(handle, CS_OPT_DETAIL,
@@ -62,7 +62,6 @@ struct BasicBlock {
             std::cout << "nombre de blocs dans le même état = " << bloc_null << std::endl;
             bloc_null++;
         }
-
         std::cout << std::endl;
     }
 };

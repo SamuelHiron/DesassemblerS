@@ -1,0 +1,15 @@
+
+elf/jmp_in_same_bb:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000401000 <_start>:
+  401000:	b8 01 00 00 00       	mov    eax,0x1
+  401005:	bb 02 00 00 00       	mov    ebx,0x2
+  40100a:	39 d8                	cmp    eax,ebx
+
+000000000040100c <exit>:
+  40100c:	90                   	nop
+  40100d:	75 fd                	jne    40100c <exit>
+  40100f:	cd 80                	int    0x80

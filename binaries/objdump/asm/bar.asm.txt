@@ -1,0 +1,26 @@
+
+elf/bar:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000401000 <_start>:
+  401000:	55                   	push   rbp
+  401001:	bd 00 00 00 00       	mov    ebp,0x0
+  401006:	eb 04                	jmp    40100c <init_for>
+
+0000000000401008 <incr>:
+  401008:	48 83 c5 01          	add    rbp,0x1
+
+000000000040100c <init_for>:
+  40100c:	48 83 fd 09          	cmp    rbp,0x9
+  401010:	7e 00                	jle    401012 <in_loop>
+
+0000000000401012 <in_loop>:
+  401012:	48 83 fd 05          	cmp    rbp,0x5
+  401016:	75 f0                	jne    401008 <incr>
+  401018:	b8 00 00 00 00       	mov    eax,0x0
+  40101d:	eb 00                	jmp    40101f <exit>
+
+000000000040101f <exit>:
+  40101f:	cd 80                	int    0x80
