@@ -71,7 +71,8 @@ struct RecursiveDescent {
     std::unordered_map<size_t, size_t> addr2block; //address already treated
     std::vector<BasicBlock> blocks;
     std::unique_ptr<LIEF::ELF::Binary> binary;
-    std::unordered_map<cs_insn*, size_t> jmp_reg_insn; // si je met pas * cela crash
+    std::unordered_map<uint16_t, size_t> regs_to_inspect;
+
     CSH handle;
 
 
@@ -105,7 +106,13 @@ struct RecursiveDescent {
             index_block++;
         }
 
-        // VSA_same_bb_no_split();
+        std::cout << "\nAnalyse VSA:"<<std::endl;
+        //VSA_same_bb_no_split();
+        for(auto index_block : jmp_regs_to_inspect){
+            regs_to_inspect.clear();
+            VSA_same_bb(index_block);
+        }
+
         std::cout << "\n________________________________________________\n\nFin de l'exploration" << std::endl;
         std::cout << "Nombre de blocs trouvés: " << blocks.size()<< "\n" << std::endl;
 
@@ -114,6 +121,42 @@ struct RecursiveDescent {
         }
         return 0;
     }
+
+    int print_instruction_regs_RW(const cs_insn insn){
+        uint16_t regs_read[64] = {0};
+        uint16_t regs_write[64] = {0} ;
+        uint8_t read_count = 0;
+        uint8_t write_count = 0;
+        std::cout << "\nProcessing instruction: " << insn.mnemonic << " " << insn.op_str << std::endl;
+        if (cs_regs_access(handle, &insn, regs_read, &read_count, regs_write, &write_count) == CS_ERR_OK) {
+            if (read_count > 0) {
+                std::cout << "\tRegisters read:";
+                for (uint8_t i = 0; i < read_count; i++) {
+                    std::cout << " " << cs_reg_name(handle, regs_read[i]);
+                    regs_to
+                }
+                std::cout << std::endl;
+            }
+    
+            if (write_count > 0) {
+                std::cout << "\tRegisters modified:";
+                for (uint8_t i = 0; i < write_count; i++) {
+                    std::string regName = cs_reg_name(handle, regs_write[i]);
+                    std::cout << " " << regName;
+    
+/*                     // Supposons que vous avez une fonction pour obtenir la valeur du registre
+                    if (op1.type == X86_OP_IMM) { // si on arrive à chopper un immediat
+                        modifiedRegisters[regName] = op1.imm;
+                    } else {
+                        modifiedRegisters[regName] = 0;
+                    }
+                    // Insérez dans la map*/
+                }
+                std::cout << std::endl;
+            }
+        }
+        return 0;
+}
 
     int split_BasicBlock(size_t id_basic_bloc_to_split, size_t split_address){
         std::vector<cs_insn> debut_split_instructions;
@@ -136,6 +179,46 @@ struct RecursiveDescent {
         return 0;     
     }
 
+    //ajoute à mon vector de block un nouveau block commençant par next_address et en mettant la connexion au parent de l'id de l'enfant. Le booléen far permet de traiter si on saute à une addresse si on split un bloc
+    int init_next_bb(size_t next_address, size_t index_block, bool far){
+
+        if (!basic_block_start_address.count(next_address) &&
+            !addr2block.count(next_address)) {  // cas où l'adresse n'a jamais été
+                                    // traitée et elle n'est pas en
+                                    // début de bloc
+            auto block_successor = BasicBlock{
+                next_address};  // création d'un nouveau bloc
+            basic_block_start_address[next_address] =
+                block_successor.id - 1; // pour garder la 1ere adresse d'un bloc associée à son id
+            blocks[index_block].ids_successors.push_back(
+                block_successor.id);
+            blocks.push_back(block_successor);
+        } else if (basic_block_start_address.count(
+                        next_address)) {  // cas où l'adresse est
+                                            // déjà le début d'un bloc
+                                            // mais elle n'a pas encore
+                                            // été traitée
+            blocks[index_block].ids_successors.push_back(
+                basic_block_start_address[next_address]);  // on ajoute l'id du
+                                            // bloc existant à la
+                                            // liste des successeurs
+                                            // de ce bloc                
+        } else if (far) {  // cas où l'adresse est déjà traitée
+            auto id_basic_bloc_to_split =
+                addr2block[next_address];  // Problème ici Bloc à split
+            size_t split_address = next_address; //renommage pour que cela soit plus clair
+            std::cout << "bloc à split est n°" << id_basic_bloc_to_split << "à l'adresse 0x" << std::hex<< split_address << std::dec <<  std::endl;
+            split_BasicBlock(id_basic_bloc_to_split, split_address);
+            std::cout << "index_block "<< index_block << "current_id_block - 1"<< current_id_block - 1 << std::endl; 
+            blocks[index_block].ids_successors.push_back(current_id_block - 1);// on a un successeur
+            if(index_block == id_basic_bloc_to_split){
+                blocks[current_id_block-1].ids_successors.push_back(current_id_block - 1);   
+            }
+        } 
+        return 0;
+    }
+
+
     int explore_BasicBlock(const int index_block) {
         // std::cout << "Exploring Basic Block " << blocks[index_block].id << std::endl;
         auto current_address = blocks[index_block].start_address;
@@ -146,13 +229,9 @@ struct RecursiveDescent {
 
         std::map<std::string, uint64_t> modifiedRegisters;
         // int i =0; si boucle infinie
-        while (!blocks[index_block].end && !addr2block.count(current_address)) {  // par défaut initialisé à false
+        while (!blocks[index_block].end && !addr2block.count(current_address)) {  // end par défaut initialisé à false
             // pour etre sur refait pas une lecture de bloc
- 
-            // if (i == 5) {
-            //   blocks[index_block]end = true;
-            // }
-            // i++;
+
             addr2block[current_address] = index_block;
 
             std::cout << "Exploring address: 0x" << std::hex << current_address << std::dec << std::endl; //On décode 1 instruction
@@ -166,6 +245,7 @@ struct RecursiveDescent {
             assert(count == 1);  // On s'occupe d'une instruction à la fois et
                                  // ça c'est bien passé
             auto insn = insn_tab[0];
+
             blocks[index_block].instructions.push_back(insn);  // on la stocke
             addr2block[current_address] =
                 blocks[index_block].id;  // on note qu'on a traité cette adresse
@@ -177,241 +257,92 @@ struct RecursiveDescent {
             //if(insn.detail->x86.operands.size()>1){
             const auto& op1 = insn.detail->x86.operands[1];
             
-            // TEST VSA même bloc (prblm split)
-            uint16_t regs_read[64], regs_write[64] = {0} ;
-            uint8_t read_count, write_count = 0;
-            std::cout << "\nProcessing instruction: " << insn.mnemonic << " " << insn.op_str << std::endl;
-            if (cs_regs_access(handle, &insn, regs_read, &read_count, regs_write, &write_count) == CS_ERR_OK) {
-                if (read_count > 0) {
-                    std::cout << "\tRegisters read:";
-                    for (uint8_t i = 0; i < read_count; i++) {
-                        std::cout << " " << cs_reg_name(handle, regs_read[i]);
-                    }
-                    std::cout << std::endl;
-                }
-        
-                if (write_count > 0) {
-                    std::cout << "\tRegisters modified:";
-                    for (uint8_t i = 0; i < write_count; i++) {
-                        std::string regName = cs_reg_name(handle, regs_write[i]);
-                        std::cout << " " << regName;
-        
-                        // Supposons que vous avez une fonction pour obtenir la valeur du registre
-                        if (op1.type == X86_OP_IMM) { // si on arrive à chopper un immediat
-                            modifiedRegisters[regName] = op1.imm;
-                        } else {
-                            modifiedRegisters[regName] = 0;
-                        }
-                        // Insérez dans la map
-                    }
-                    std::cout << std::endl;
-                }
-                    // Affichage des registres modifiés et de leurs valeurs
-                std::cout << "\tModified Registers and their values:" << std::endl;
-                for (const auto& pair : modifiedRegisters) {
-                    std::cout << "\t\t" << pair.first << ": " <<std::hex <<pair.second<< std::dec << std::endl;
-                }
-            }
-            // FIN TEST
-
             if (cs_insn_group(handle, &insn, CS_GRP_CALL) ||
                 cs_insn_group(handle, &insn, CS_GRP_JUMP)) {
                 blocks[index_block].end = true;              
                 
                 // 2 potentiellement nouveaux blocs à créer
                 // le bloc juste après l'appel commence à next_address
-                if (insn.id != X86_INS_JMP && insn.id != X86_INS_LJMP) {
-                    if (!basic_block_start_address.count(next_address) &&
-                        !addr2block.count(next_address)) {  // cas où l'adresse n'a jamais été
-                                              // traitée et elle n'est pas en
-                                              // début de bloc
-                        auto block_successor = BasicBlock{
-                            next_address};  // création d'un nouveau bloc
-                        basic_block_start_address[next_address] =
-                            block_successor.id - 1; // pour garder la 1ere adresse d'un bloc associée à son id
-                        blocks[index_block].ids_successors.push_back(
-                            block_successor.id);
-                        blocks.push_back(block_successor);
-                    } else if (basic_block_start_address.count(
-                                   next_address)) {  // cas où l'adresse est
-                                                     // déjà le début d'un bloc
-                                                     // mais elle n'a pas encore
-                                                     // été traitée
-                        blocks[index_block].ids_successors.push_back(
-                            basic_block_start_address[next_address]);  // on ajoute l'id du
-                                                        // bloc existant à la
-                                                        // liste des successeurs
-                                                        // de ce bloc                
-                    }
+                if (insn.id != X86_INS_JMP && insn.id != X86_INS_LJMP) { 
+                    bool far = false;
+                    init_next_bb(next_address, index_block, far); //ajoute le bb qui commence à l'adresse suivante au vector de cfg
                 }
 
                 // le bloc loin
                 const auto& op = insn.detail->x86.operands[0];
-
-                std::string regEax = cs_reg_name(handle, regs_read[0]);
-
                 if (op.type == X86_OP_IMM) {  // cas où l'instruction contient
-                                              // l'adresse de l'appel                 
-                    std::cout << "0x" << std::hex << op.imm << std::dec
-                              << "  X86_OP_IMM" << std::endl;            
-
-                    if (!basic_block_start_address.count(op.imm) &&
-                        !addr2block.count(
-                            op.imm)) {  // cas où l'adresse n'a jamais été
-                                        // traitée et elle n'est pas en début de
-                                        // bloc
-                        auto block_successor = BasicBlock{static_cast<size_t>(
-                            op.imm)};  // création d'un nouveau bloc
-                        basic_block_start_address[static_cast<size_t>(op.imm)] =
-                            block_successor.id - 1; // pour garder la 1ere adresse d'un bloc associée à son id
-                        blocks[index_block].ids_successors.push_back(
-                            block_successor.id);
-                        
-                        blocks.push_back(block_successor);
-
-                    } else if (basic_block_start_address.count(
-                                   op.imm)) {  // cas où l'adresse est déjà le
-                                               // début d'un bloc mais elle n'a
-                                               // pas encore été traitée
-                       blocks[index_block].ids_successors.push_back(basic_block_start_address[op.imm]);  // on ajoute l'id du bloc
-                                                 // existant à la liste des
-                                                  // successeurs de ce bloc
-                    } else {  // cas où l'adresse est déjà traitée
-                        auto id_basic_bloc_to_split =
-                            addr2block[op.imm];  // Problème ici Bloc à split
-                        size_t split_address = static_cast<size_t>(op.imm);
-                        std::cout << "bloc à split est n°" << id_basic_bloc_to_split << "à l'adresse 0x" << std::hex<< op.imm << std::dec <<  std::endl;
-                        split_BasicBlock(id_basic_bloc_to_split, split_address);
-                        std::cout << "index_block "<< index_block << "current_id_block - 1"<< current_id_block - 1 << std::endl; 
-                        blocks[index_block].ids_successors.push_back(current_id_block - 1);// on a un successeur
-                        if(index_block == id_basic_bloc_to_split){
-                         blocks[current_id_block-1].ids_successors.push_back(current_id_block - 1);   
-                        }
-                    }           
+                                              // l'adresse de l'appel  
+                        std::cout << "0x" << std::hex << op.imm << std::dec
+                        << "  X86_OP_IMM" << std::endl;   
+                    bool far = true;
+                    init_next_bb(static_cast<size_t>(op.imm), index_block, far);                        
                 } else if (op.type == X86_OP_MEM) {
                     std::cout << "0x" << std::hex << std::dec << "  X86_OP_MEM" << std::endl;
-
-                    // TEST
-                    jmp_reg_insn[&insn] = index_block;
-                    std::string regEax = cs_reg_name(handle, regs_read[0]);
-                    if(read_count ==1 && modifiedRegisters.count(regEax) && modifiedRegisters[regEax]!=0){
-                        //Si on lit qu'un seul registre, on a une valeure pour celui-ci et elle est différente de 0
-                        size_t valeur_Reg = modifiedRegisters[regEax];
-                        std::cout << regEax <<" = 0x"<<std::hex << modifiedRegisters[regEax]<<std::dec<< std::endl;
-
-                        if (!basic_block_start_address.count(valeur_Reg) &&
-                        !addr2block.count(
-                                valeur_Reg)) {  // cas où l'adresse n'a jamais été
-                                            // traitée et elle n'est pas en début de
-                                            // bloc
-                            auto block_successor = BasicBlock{static_cast<size_t>(
-                                valeur_Reg)};  // création d'un nouveau bloc
-                            basic_block_start_address[static_cast<size_t>(valeur_Reg)] =
-                                block_successor.id - 1; // pour garder la 1ere adresse d'un bloc associée à son id
-                            blocks[index_block].ids_successors.push_back(
-                                block_successor.id);
-                            
-                            blocks.push_back(block_successor);
-
-                        } else if (basic_block_start_address.count(
-                                  valeur_Reg)) {  // cas où l'adresse est déjà le
-                                                // début d'un bloc mais elle n'a
-                                                // pas encore été traitée
-                        blocks[index_block].ids_successors.push_back(basic_block_start_address[valeur_Reg]);  // on ajoute l'id du bloc
-                                                    // existant à la liste des
-                                                    // successeurs de ce bloc
-                        } else {  // cas où l'adresse est déjà traitée
-                            auto id_basic_bloc_to_split =
-                                addr2block[valeur_Reg];  // Problème ici Bloc à split
-                            size_t split_address = static_cast<size_t>(valeur_Reg);
-                            std::cout << "bloc à split est n°" << id_basic_bloc_to_split << "à l'adresse 0x" << std::hex<< op.imm << std::dec <<  std::endl;
-                            split_BasicBlock(id_basic_bloc_to_split, split_address);
-                            std::cout << "index_block "<< index_block << "current_id_block - 1"<< current_id_block - 1 << std::endl; 
-                            blocks[index_block].ids_successors.push_back(current_id_block - 1);// on a un successeur
-                            if(index_block == id_basic_bloc_to_split){
-                            blocks[current_id_block-1].ids_successors.push_back(current_id_block - 1);   
-                            }
-                        } 
-                    }
-
-                    //FIN TEST
-
-
+                    print_instruction_regs_RW(insn);
+                    jmp_regs_to_inspect.push_back(index_block);
                 } else if (op.type == X86_OP_REG) {
                     std::cout << "0x" << std::hex << std::dec << "  X86_OP_REG" << std::endl;
-
                 }
-
                 // std::cout << "CALL ou JUMP" << std::endl;
             } else if (cs_insn_group(handle, &insn, CS_GRP_RET) ||
                        cs_insn_group(handle, &insn, CS_GRP_INT)) {
                 // std::cout << "RET ou INT" << std::endl;
                 blocks[index_block].end = true;
             }
-            // if (!basic_block_start_address.count(next_address)){  
             current_address = next_address;
-            // } else {
-            //     blocks[index_block].end = true;
-            // }
-            cs_free(
+/* 
+            // cs_free( // my use_after_free
                 insn_tab,
-                count);  // manière + belle de le faire existe cf Jack's code
+                count); */  // manière + belle de le faire existe cf Jack's code
         }
-        //blocks[index_block].print_BasicBlock();
         
 
         return 0;
     }
 
 
-    int VSA_same_bb_no_split(){
-        for (const auto& [insn, index_block] : jmp_reg_insn){        
-                    // lets find registory value
-            auto op = insn->detail->x86.operands[0];
-            std::cout << "Dans VSA" << std::endl;
-            std::string reg_base; 
-            if (cs_reg_name(handle, op.mem.base)){
-                reg_base = cs_reg_name(handle, op.mem.base);
-                std::cout << "Base Register: " << reg_base << std::endl;
+    int VSA_same_bb(size_t index_block){
+        // init 
+        std::vector<cs_insn> instructions_same_bb = blocks[index_block].instructions;
+        std::cout << "VSA Inside a block" << std::endl;
+        const cs_insn insn = instructions_same_bb.back();
+        uint16_t regs_read_useful[64] = {0};
+        uint16_t regs_write[64] = {0} ;
+        uint8_t read_count_useful = 0;
+        uint8_t write_count = 0;
+        if (cs_regs_access(handle, &insn, regs_read_useful, &read_count_useful, regs_write, &write_count) == CS_ERR_OK) {
+            if (read_count_useful > 0) {
+                std::cout << "\tRegisters read to find:";
+                for (uint8_t i = 0; i < read_count_useful; i++) {
+                    std::cout << " " << cs_reg_name(handle, regs_read_useful[i]);
+                    std::cout << " " << regs_read_useful[i];
+                    regs_to_inspect[regs_read_useful[i]] = std::numeric_limits<size_t>::max();
+                }
+                std::cout << std::endl;
             }
+            assert(write_count == 0); // Normalement en x86 aucune instruction ne jmp & write
+        }
+        for (int i = instructions_same_bb.size() - 2; i >= 0; --i) {
+            print_instruction_regs_RW(instructions_same_bb[i]);
+            uint16_t regs_read_current[64] = {0};
+            uint16_t regs_write_current[64] = {0} ;
+            uint8_t read_count_current = 0;
+            uint8_t write_count_current = 0;
+            if (cs_regs_access(handle, &insn, regs_read_current, &read_count_current, regs_write_current, &write_count_current) == CS_ERR_OK) {
+                if (write_current_current > 0) {
+                    for (uint8_t i = 0; i < write_count_current; i++){
+                        if(regs_to_inspect.count(write_count_current)){ // si on a un registre qui nous intéresse
+                            //alors tous les registres de l'instruction nous intéresse tant en écriture qu'en lecture Cependant comment traiter les immédiats
+                        }
+                    }
 
-            if ( cs_reg_name(handle, op.mem.index) != NULL){
-                std::cout << "Index" << std::endl;
-            } 
-            std::cout << "Scale: " << op.mem.scale << std::endl;
-            std::cout << "Displacement: " << op.mem.disp << std::endl;
-            if ( cs_reg_name(handle, op.mem.segment) != NULL){
-                std::cout << "Segment" << std::endl;
-            }
-            for (auto& insn_bloc : blocks[index_block].instructions) {
-                uint16_t regs_read[64], regs_write[64] = {0} ;
-                uint8_t read_count, write_count = 0;
-    
-                std::cout << "\nProcessing instruction: " << insn_bloc.mnemonic << " " << insn_bloc.op_str << std::endl;
-    
-                if (cs_regs_access(handle, &insn_bloc, regs_read, &read_count, regs_write, &write_count) == CS_ERR_OK) {
-                    if (read_count>0) {
-                        printf("\tRegisters read:");
-                        for (uint8_t i = 0; i < read_count; i++) {
-                            printf(" %s", cs_reg_name(handle, regs_read[i]));
-                        }
-                        printf("\n");
-                    }
-    
-                    if (write_count>0 ) {
-                        printf("\tRegisters modified:");
-                        for (uint8_t i = 0; i < write_count; i++) {
-                            printf(" %s", cs_reg_name(handle, regs_write[i]));
-                        }
-                        printf("\n");
-                    }
-                } else {
-                    std::cerr << "Failed to get register access information." << std::endl;
+
                 }
             }
         }
-        
+
         return 0;
+
     }
     
 
