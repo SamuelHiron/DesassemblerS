@@ -34,14 +34,14 @@ struct BasicBlock {
     size_t id;
     size_t start_address;
     bool end;
-    std::vector<size_t> ids_successors;
+    std::vector<size_t> childs_id;
     std::vector<cs_insn> instructions;
     BasicBlock(size_t start_address)
         : id(current_id_block), start_address(start_address), end(false) {
         current_id_block++;
     }
-    BasicBlock(size_t start_address,  std::vector<cs_insn> instructions, std::vector<size_t> ids_successors)
-        : id(current_id_block), start_address(start_address), instructions(instructions), ids_successors(ids_successors), end(false) {
+    BasicBlock(size_t start_address,  std::vector<cs_insn> instructions, std::vector<size_t> childs_id)
+        : id(current_id_block), start_address(start_address), instructions(instructions), childs_id(childs_id), end(false) {
         current_id_block++;
     }
 
@@ -49,7 +49,7 @@ struct BasicBlock {
         
         std::cout << "Basic Block n°" << id ;
         std::cout << " | Parents de :";
-        for(const auto & id_successor : ids_successors){
+        for(const auto & id_successor : childs_id){
             std::cout << " "<< id_successor;
         }
         std::cout<< std::endl;
@@ -107,12 +107,6 @@ struct RecursiveDescent {
         }
 
         std::cout << "\nAnalyse VSA:"<<std::endl;
-        //VSA_same_bb_no_split();
-        for(auto index_block : jmp_regs_to_inspect){
-            regs_to_inspect.clear();
-            VSA_same_bb(index_block);
-        }
-
         std::cout << "\n________________________________________________\n\nFin de l'exploration" << std::endl;
         std::cout << "Nombre de blocs trouvés: " << blocks.size()<< "\n" << std::endl;
 
@@ -133,7 +127,6 @@ struct RecursiveDescent {
                 std::cout << "\tRegisters read:";
                 for (uint8_t i = 0; i < read_count; i++) {
                     std::cout << " " << cs_reg_name(handle, regs_read[i]);
-                    regs_to
                 }
                 std::cout << std::endl;
             }
@@ -171,10 +164,10 @@ struct RecursiveDescent {
             }
             i++;
         }
-        auto block_successor = BasicBlock{split_address, fin_split_instructions, blocks[id_basic_bloc_to_split].ids_successors};  // création d'un nouveau bloc
+        auto block_successor = BasicBlock{split_address, fin_split_instructions, blocks[id_basic_bloc_to_split].childs_id};  // création d'un nouveau bloc
         basic_block_start_address[split_address] = block_successor.id - 1; // pour garder la 1ere adresse d'un bloc associée à son id
         blocks[id_basic_bloc_to_split].instructions = debut_split_instructions;
-        blocks[id_basic_bloc_to_split].ids_successors.clear();
+        blocks[id_basic_bloc_to_split].childs_id.clear();
         blocks.push_back(block_successor);
         return 0;     
     }
@@ -190,7 +183,7 @@ struct RecursiveDescent {
                 next_address};  // création d'un nouveau bloc
             basic_block_start_address[next_address] =
                 block_successor.id - 1; // pour garder la 1ere adresse d'un bloc associée à son id
-            blocks[index_block].ids_successors.push_back(
+            blocks[index_block].childs_id.push_back(
                 block_successor.id);
             blocks.push_back(block_successor);
         } else if (basic_block_start_address.count(
@@ -198,7 +191,7 @@ struct RecursiveDescent {
                                             // déjà le début d'un bloc
                                             // mais elle n'a pas encore
                                             // été traitée
-            blocks[index_block].ids_successors.push_back(
+            blocks[index_block].childs_id.push_back(
                 basic_block_start_address[next_address]);  // on ajoute l'id du
                                             // bloc existant à la
                                             // liste des successeurs
@@ -210,9 +203,9 @@ struct RecursiveDescent {
             std::cout << "bloc à split est n°" << id_basic_bloc_to_split << "à l'adresse 0x" << std::hex<< split_address << std::dec <<  std::endl;
             split_BasicBlock(id_basic_bloc_to_split, split_address);
             std::cout << "index_block "<< index_block << "current_id_block - 1"<< current_id_block - 1 << std::endl; 
-            blocks[index_block].ids_successors.push_back(current_id_block - 1);// on a un successeur
+            blocks[index_block].childs_id.push_back(current_id_block - 1);// on a un successeur
             if(index_block == id_basic_bloc_to_split){
-                blocks[current_id_block-1].ids_successors.push_back(current_id_block - 1);   
+                blocks[current_id_block-1].childs_id.push_back(current_id_block - 1);   
             }
         } 
         return 0;
@@ -279,7 +272,6 @@ struct RecursiveDescent {
                 } else if (op.type == X86_OP_MEM) {
                     std::cout << "0x" << std::hex << std::dec << "  X86_OP_MEM" << std::endl;
                     print_instruction_regs_RW(insn);
-                    jmp_regs_to_inspect.push_back(index_block);
                 } else if (op.type == X86_OP_REG) {
                     std::cout << "0x" << std::hex << std::dec << "  X86_OP_REG" << std::endl;
                 }
@@ -301,49 +293,7 @@ struct RecursiveDescent {
     }
 
 
-    int VSA_same_bb(size_t index_block){
-        // init 
-        std::vector<cs_insn> instructions_same_bb = blocks[index_block].instructions;
-        std::cout << "VSA Inside a block" << std::endl;
-        const cs_insn insn = instructions_same_bb.back();
-        uint16_t regs_read_useful[64] = {0};
-        uint16_t regs_write[64] = {0} ;
-        uint8_t read_count_useful = 0;
-        uint8_t write_count = 0;
-        if (cs_regs_access(handle, &insn, regs_read_useful, &read_count_useful, regs_write, &write_count) == CS_ERR_OK) {
-            if (read_count_useful > 0) {
-                std::cout << "\tRegisters read to find:";
-                for (uint8_t i = 0; i < read_count_useful; i++) {
-                    std::cout << " " << cs_reg_name(handle, regs_read_useful[i]);
-                    std::cout << " " << regs_read_useful[i];
-                    regs_to_inspect[regs_read_useful[i]] = std::numeric_limits<size_t>::max();
-                }
-                std::cout << std::endl;
-            }
-            assert(write_count == 0); // Normalement en x86 aucune instruction ne jmp & write
-        }
-        for (int i = instructions_same_bb.size() - 2; i >= 0; --i) {
-            print_instruction_regs_RW(instructions_same_bb[i]);
-            uint16_t regs_read_current[64] = {0};
-            uint16_t regs_write_current[64] = {0} ;
-            uint8_t read_count_current = 0;
-            uint8_t write_count_current = 0;
-            if (cs_regs_access(handle, &insn, regs_read_current, &read_count_current, regs_write_current, &write_count_current) == CS_ERR_OK) {
-                if (write_current_current > 0) {
-                    for (uint8_t i = 0; i < write_count_current; i++){
-                        if(regs_to_inspect.count(write_count_current)){ // si on a un registre qui nous intéresse
-                            //alors tous les registres de l'instruction nous intéresse tant en écriture qu'en lecture Cependant comment traiter les immédiats
-                        }
-                    }
 
-
-                }
-            }
-        }
-
-        return 0;
-
-    }
     
 
 };
@@ -385,4 +335,8 @@ int main(int argc, char** argv) {
     
     return 0;
 }
+
+
+
+
 
