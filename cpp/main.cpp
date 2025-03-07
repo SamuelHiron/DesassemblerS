@@ -30,6 +30,16 @@ struct CSH {
     }  // convertir implicitement un objet CSH en une référence de type csh&
 };
 
+struct Position_Registre{
+    size_t position;
+    uint16_t registre;
+};
+
+struct Position_Value{
+    size_t position;
+    int64_t value; // peut etre une float
+};
+
 struct BasicBlock {
     size_t id;
     size_t start_address;
@@ -37,13 +47,16 @@ struct BasicBlock {
     std::vector<size_t> childs_id;
     std::vector<size_t> parents_id;
     std::vector<cs_insn> instructions;
+    std::unordered_map<uint16_t, std::vector<Position_Registre>> unknown_regs_dependencies; 
+    std::unordered_map<uint16_t, Position_Value> known_regs; 
     BasicBlock(size_t start_address)
-        : id(current_id_block), start_address(start_address), end(false) {
+        : id(current_id_block), start_address(start_address), instructions(), unknown_regs_dependencies(), known_regs(), end(false) {
         current_id_block++;
     }
-    BasicBlock(size_t start_address,  std::vector<cs_insn> instructions, std::vector<size_t> childs_id, std::vector<size_t> parents_id)
-        : id(current_id_block), start_address(start_address), instructions(instructions), childs_id(childs_id), parents_id(parents_id), end(false) {
+    BasicBlock(size_t start_address, std::vector<size_t> childs_id, std::vector<size_t> parents_id)
+        : id(current_id_block), start_address(start_address), instructions(), unknown_regs_dependencies(), known_regs(),childs_id(childs_id), parents_id(parents_id), end(false) {
         current_id_block++;
+        
     }
 
     void print_BasicBlock() const {
@@ -79,16 +92,15 @@ int replace_id(std::vector<size_t> &parents_id, size_t id_to_supress, size_t id_
     return 0;
 }
 
+
+
 struct RecursiveDescent {
     std::unordered_map<size_t, size_t> basic_block_start_address;
     std::unordered_map<size_t, size_t> addr2block; //address already treated
     std::vector<BasicBlock> blocks;
     std::unique_ptr<LIEF::ELF::Binary> binary;
-    std::unordered_map<uint16_t, size_t> regs_to_inspect;
 
     CSH handle;
-
-
 
     int init_cfg(){
         blocks.push_back({binary->entrypoint()});
@@ -109,19 +121,22 @@ struct RecursiveDescent {
                     current_id_block - 1;
            }
         }
-
         std::cout << blocks.size()-1 << " functions found \n" << std::endl;
-
         int index_block = 0;
         while (index_block != blocks.size()) {
             explore_BasicBlock(index_block);
             index_block++;
         }
-
-        std::cout << "\nAnalyse VSA:"<<std::endl;
+        std::cout << "\n________________________________________________\n\n";
+        std::cout << "Analyse VSA:\n";
+        for(int i =0; i<blocks.size(); i++){
+            std::cout << "\nBlock "<< i << " Dependencies:" << std::endl;
+            print_unknown_regs_dependencies(blocks[i].unknown_regs_dependencies);
+            std::cout << "Block "<< i << " Known Regs:" << std::endl;
+            print_known_regs(blocks[i].known_regs);
+        }
         std::cout << "\n________________________________________________\n\nFin de l'exploration" << std::endl;
         std::cout << "Nombre de blocs trouvés: " << blocks.size()<< "\n" << std::endl;
-
         for (const auto& block : blocks) {
             block.print_BasicBlock();  
         }
@@ -148,14 +163,6 @@ struct RecursiveDescent {
                 for (uint8_t i = 0; i < write_count; i++) {
                     std::string regName = cs_reg_name(handle, regs_write[i]);
                     std::cout << " " << regName;
-    
-/*                     // Supposons que vous avez une fonction pour obtenir la valeur du registre
-                    if (op1.type == X86_OP_IMM) { // si on arrive à chopper un immediat
-                        modifiedRegisters[regName] = op1.imm;
-                    } else {
-                        modifiedRegisters[regName] = 0;
-                    }
-                    // Insérez dans la map*/
                 }
                 std::cout << std::endl;
             }
@@ -165,20 +172,12 @@ struct RecursiveDescent {
 
     int split_BasicBlock(size_t id_basic_bloc_to_split, size_t split_address, size_t index_block_parent){
         std::vector<cs_insn> debut_split_instructions;
-        std::vector<cs_insn> fin_split_instructions;
         int i = 0;
-        while (i< blocks[id_basic_bloc_to_split].instructions.size()){
-            if(blocks[id_basic_bloc_to_split].instructions[i].address < split_address){
-                debut_split_instructions.push_back(blocks[id_basic_bloc_to_split].instructions[i]);
-            } else {
-                fin_split_instructions.push_back(blocks[id_basic_bloc_to_split].instructions[i]);
-            }
-            i++;
-        }
-                // Il faut enlever au index_block_parent + 1 l'élément 0 de son parents_id
-
+        int j = 0;
+        auto block_successor = BasicBlock{split_address, blocks[id_basic_bloc_to_split].childs_id, {index_block_parent}};  // création d'un nouveau bloc
+        blocks[id_basic_bloc_to_split].known_regs.clear();
+        blocks[id_basic_bloc_to_split].unknown_regs_dependencies.clear();
         // le nouveau block
-        auto block_successor = BasicBlock{split_address, fin_split_instructions, blocks[id_basic_bloc_to_split].childs_id, {index_block_parent}};  // création d'un nouveau bloc
         if(blocks[id_basic_bloc_to_split].id != index_block_parent){ // si il n'est pas son propre parent
             block_successor.parents_id.push_back(blocks[id_basic_bloc_to_split].id);
         }
@@ -186,6 +185,20 @@ struct RecursiveDescent {
         blocks.push_back(block_successor);
         if(index_block_parent == id_basic_bloc_to_split){// si il est son propre parent
             blocks[block_successor.id].childs_id.push_back(block_successor.id);   
+        }
+
+        
+        //les instructions
+        while (i< blocks[id_basic_bloc_to_split].instructions.size()){
+            if(blocks[id_basic_bloc_to_split].instructions[i].address < split_address){
+                debut_split_instructions.push_back(blocks[id_basic_bloc_to_split].instructions[i]);
+                instruction_RW_regs(blocks[id_basic_bloc_to_split].instructions[i], i, id_basic_bloc_to_split);
+                j++;
+            } else {
+                block_successor.instructions.push_back(blocks[id_basic_bloc_to_split].instructions[i]);
+                instruction_RW_regs(blocks[id_basic_bloc_to_split].instructions[i], i-j, block_successor.id);
+            }
+            i++;
         }
 
         //le block split
@@ -198,6 +211,8 @@ struct RecursiveDescent {
         if (id_basic_bloc_to_split != index_block_parent){
             blocks[index_block_parent].childs_id.push_back(block_successor.id);
         }
+
+
         return 0;     
     }
 
@@ -231,6 +246,78 @@ struct RecursiveDescent {
         return 0;
     }
 
+    void print_unknown_regs_dependencies(const std::unordered_map<uint16_t, std::vector<Position_Registre>>& unknown_regs_dependencies) {
+        for (const auto& pair : unknown_regs_dependencies) {
+            uint16_t reg = pair.first;
+            const std::vector<Position_Registre>& dependances = pair.second;
+            std::cout << "Registre: " << cs_reg_name(handle, reg) << "\n";
+            for (const auto& dependance : dependances) {
+                std::cout << "  Position_Instr: " << dependance.position << ", Registre: " << cs_reg_name(handle, dependance.registre) << "\n";
+            }
+        }
+    }
+
+    void print_known_regs(const std::unordered_map<uint16_t, Position_Value>& known_regs) {
+        for (const auto& pair : known_regs) {
+            uint16_t reg = pair.first;
+            std::cout << "Registre: " << cs_reg_name(handle, reg) << "\n";
+            std::cout << "  Position_Instr: " << pair.second.position << ", Value: " << pair.second.value << "\n";
+        }
+    }
+    
+    int instruction_RW_regs(const cs_insn insn, size_t position_instruction, const size_t index_block){ //split bloc à traiter
+        print_instruction_regs_RW(insn);
+        uint16_t regs_read[64] = {0};
+        uint16_t regs_write[64] = {0};
+        uint8_t read_count = 0;
+        uint8_t write_count = 0;
+        if (cs_regs_access(handle, &insn, regs_read, &read_count, regs_write, &write_count) == CS_ERR_OK) {
+            bool no_read_unknown = true; // Si le nombre d'inconnu de read = 0
+            if (write_count > 0) {
+                //cas où on est pas capable de résoudre la dépendance
+                for (uint8_t k = 0; k < write_count; k++){
+                    for (uint8_t l = 0; l < read_count; l++){
+                        if(!blocks[index_block].known_regs.count(regs_read[l])){
+                            blocks[index_block].unknown_regs_dependencies[regs_write[k]].push_back({position_instruction, regs_read[l]});
+                            no_read_unknown = false;
+                        }
+                    }
+                    if(no_read_unknown){
+                        print_known_regs(blocks[index_block].known_regs);
+                        int64_t value = get_reg_value(); // cas où float
+                        blocks[index_block].known_regs[regs_write[k]] = {position_instruction, value}; // 0 à remplacer
+                        
+                        if(blocks[index_block].unknown_regs_dependencies.count(regs_write[k])){
+                            blocks[index_block].unknown_regs_dependencies.erase(regs_write[k]);
+                        }
+                    }
+                }
+            }
+        }
+        return 0;
+    }   
+
+    int64_t get_reg_value(const cs_insn insn, const size_t index_block){
+        int64_t value;
+        auto op = insn->detail->x86.operands[0];
+        std::cout << "Détails instructions" << std::endl;
+        std::string reg_base; 
+        if (cs_reg_name(handle, op.mem.base)){
+            reg_base = cs_reg_name(handle, op.mem.base);
+            std::cout << "Base Register: " << reg_base << std::endl;
+        }
+
+        if ( cs_reg_name(handle, op.mem.index) != NULL){
+            std::cout << "Index" << std::endl;
+        } 
+        std::cout << "Scale: " << op.mem.scale << std::endl;
+        std::cout << "Displacement: " << op.mem.disp << std::endl;
+        if ( cs_reg_name(handle, op.mem.segment) != NULL){
+            std::cout << "Segment" << std::endl;
+        }
+        return value;
+    }
+
 
     int explore_BasicBlock(const int index_block) {
         // std::cout << "Exploring Basic Block " << blocks[index_block].id << std::endl;
@@ -240,13 +327,13 @@ struct RecursiveDescent {
             blocks[index_block].end = true; // dans le cas split d'un bloc déjà vu
         }
 
-        std::map<std::string, uint64_t> modifiedRegisters;
-        // int i =0; si boucle infinie
+
+
+        int i =0; //pour la position de l'instruction
         while (!blocks[index_block].end && !addr2block.count(current_address)) {  // end par défaut initialisé à false
             // pour etre sur refait pas une lecture de bloc
 
             addr2block[current_address] = index_block;
-
             std::cout << "Exploring address: 0x" << std::hex << current_address << std::dec << std::endl; //On décode 1 instruction
             std::array<u_int8_t, 16> bytes;
             for (size_t i = 0; i < 16; i++) {
@@ -258,6 +345,8 @@ struct RecursiveDescent {
             assert(count == 1);  // On s'occupe d'une instruction à la fois et
                                  // ça c'est bien passé
             auto insn = insn_tab[0];
+
+            instruction_RW_regs(insn, i, index_block);
 
             blocks[index_block].instructions.push_back(insn);  // on la stocke
             addr2block[current_address] =
@@ -307,16 +396,12 @@ struct RecursiveDescent {
             // cs_free( // my use_after_free
                 insn_tab,
                 count); */  // manière + belle de le faire existe cf Jack's code
+            i++;
         }
         
 
         return 0;
     }
-
-
-
-    
-
 };
 
 

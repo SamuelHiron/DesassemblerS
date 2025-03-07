@@ -3,8 +3,9 @@ section .text
 
 _start:
     ; Compare 1 and 2
-    mov eax, exit          ; Load 1 into EAX
-    mov ebx, 2          ; Load 2 into EBX
+    mov eax, exit
+    add ebx, eax          ; Load 1 into EAX
+    mov ebx, eax          ; Load 2 into EBX
     cmp eax, ebx        ; Compare EAX and EBX
     jmp [eax]            ; Jump to exit 
 
