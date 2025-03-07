@@ -35,22 +35,26 @@ struct BasicBlock {
     size_t start_address;
     bool end;
     std::vector<size_t> childs_id;
+    std::vector<size_t> parents_id;
     std::vector<cs_insn> instructions;
     BasicBlock(size_t start_address)
         : id(current_id_block), start_address(start_address), end(false) {
         current_id_block++;
     }
-    BasicBlock(size_t start_address,  std::vector<cs_insn> instructions, std::vector<size_t> childs_id)
-        : id(current_id_block), start_address(start_address), instructions(instructions), childs_id(childs_id), end(false) {
+    BasicBlock(size_t start_address,  std::vector<cs_insn> instructions, std::vector<size_t> childs_id, std::vector<size_t> parents_id)
+        : id(current_id_block), start_address(start_address), instructions(instructions), childs_id(childs_id), parents_id(parents_id), end(false) {
         current_id_block++;
     }
 
     void print_BasicBlock() const {
-        
-        std::cout << "Basic Block n°" << id ;
+        std::cout << "Basic Block n°" << id ; 
+        std::cout << " | Enfants de :";
+        for(const auto & parent_id : parents_id){
+            std::cout << " "<< parent_id;
+        }
         std::cout << " | Parents de :";
-        for(const auto & id_successor : childs_id){
-            std::cout << " "<< id_successor;
+        for(const auto & child_id : childs_id){
+            std::cout << " "<< child_id;
         }
         std::cout<< std::endl;
         for (const auto& insn : instructions) {
@@ -65,6 +69,15 @@ struct BasicBlock {
         std::cout << std::endl;
     }
 };
+
+int replace_id(std::vector<size_t> &parents_id, size_t id_to_supress, size_t id_to_add){
+    for(int i = 0; i< parents_id.size();i++){
+        if(parents_id[i] == id_to_supress){
+            parents_id[i] = id_to_add;
+        }
+    }
+    return 0;
+}
 
 struct RecursiveDescent {
     std::unordered_map<size_t, size_t> basic_block_start_address;
@@ -96,7 +109,6 @@ struct RecursiveDescent {
                     current_id_block - 1;
            }
         }
-
 
         std::cout << blocks.size()-1 << " functions found \n" << std::endl;
 
@@ -151,10 +163,9 @@ struct RecursiveDescent {
         return 0;
 }
 
-    int split_BasicBlock(size_t id_basic_bloc_to_split, size_t split_address){
+    int split_BasicBlock(size_t id_basic_bloc_to_split, size_t split_address, size_t index_block_parent){
         std::vector<cs_insn> debut_split_instructions;
         std::vector<cs_insn> fin_split_instructions;
- 
         int i = 0;
         while (i< blocks[id_basic_bloc_to_split].instructions.size()){
             if(blocks[id_basic_bloc_to_split].instructions[i].address < split_address){
@@ -164,49 +175,58 @@ struct RecursiveDescent {
             }
             i++;
         }
-        auto block_successor = BasicBlock{split_address, fin_split_instructions, blocks[id_basic_bloc_to_split].childs_id};  // création d'un nouveau bloc
-        basic_block_start_address[split_address] = block_successor.id - 1; // pour garder la 1ere adresse d'un bloc associée à son id
-        blocks[id_basic_bloc_to_split].instructions = debut_split_instructions;
-        blocks[id_basic_bloc_to_split].childs_id.clear();
+                // Il faut enlever au index_block_parent + 1 l'élément 0 de son parents_id
+
+        // le nouveau block
+        auto block_successor = BasicBlock{split_address, fin_split_instructions, blocks[id_basic_bloc_to_split].childs_id, {index_block_parent}};  // création d'un nouveau bloc
+        if(blocks[id_basic_bloc_to_split].id != index_block_parent){ // si il n'est pas son propre parent
+            block_successor.parents_id.push_back(blocks[id_basic_bloc_to_split].id);
+        }
+        basic_block_start_address[split_address] = block_successor.id; // pour garder la 1ere adresse d'un bloc associée à son id
         blocks.push_back(block_successor);
+        if(index_block_parent == id_basic_bloc_to_split){// si il est son propre parent
+            blocks[block_successor.id].childs_id.push_back(block_successor.id);   
+        }
+
+        //le block split
+        blocks[id_basic_bloc_to_split].instructions = debut_split_instructions;
+        for(auto id_child : blocks[id_basic_bloc_to_split].childs_id){ //on adapte les parents_id de ses enfants
+            replace_id(blocks[id_child].parents_id, id_basic_bloc_to_split, block_successor.id);
+        }
+        blocks[id_basic_bloc_to_split].childs_id.clear();
+        blocks[id_basic_bloc_to_split].childs_id.push_back(block_successor.id);
+        if (id_basic_bloc_to_split != index_block_parent){
+            blocks[index_block_parent].childs_id.push_back(block_successor.id);
+        }
         return 0;     
     }
 
     //ajoute à mon vector de block un nouveau block commençant par next_address et en mettant la connexion au parent de l'id de l'enfant. Le booléen far permet de traiter si on saute à une addresse si on split un bloc
-    int init_next_bb(size_t next_address, size_t index_block, bool far){
-
+    int init_next_bb(size_t next_address, size_t index_block_parent, bool far){
         if (!basic_block_start_address.count(next_address) &&
             !addr2block.count(next_address)) {  // cas où l'adresse n'a jamais été
                                     // traitée et elle n'est pas en
                                     // début de bloc
-            auto block_successor = BasicBlock{
-                next_address};  // création d'un nouveau bloc
-            basic_block_start_address[next_address] =
-                block_successor.id - 1; // pour garder la 1ere adresse d'un bloc associée à son id
-            blocks[index_block].childs_id.push_back(
-                block_successor.id);
+            auto block_successor = BasicBlock{next_address};  // création d'un nouveau bloc
+            basic_block_start_address[next_address] = block_successor.id; // pour garder la 1ere adresse d'un bloc associée à son id
+            blocks[index_block_parent].childs_id.push_back(block_successor.id); //on ajoute l'id de l'enfant à la liste des enfants du bloc parent
+            block_successor.parents_id.push_back(index_block_parent); // on ajoute l'id du parent à la liste des parents du bloc enfant
             blocks.push_back(block_successor);
-        } else if (basic_block_start_address.count(
-                        next_address)) {  // cas où l'adresse est
+        } 
+        else if (basic_block_start_address.count(next_address)) {  // cas où l'adresse est
                                             // déjà le début d'un bloc
                                             // mais elle n'a pas encore
                                             // été traitée
-            blocks[index_block].childs_id.push_back(
-                basic_block_start_address[next_address]);  // on ajoute l'id du
+            blocks[index_block_parent].childs_id.push_back(basic_block_start_address[next_address]);  // on ajoute l'id du
                                             // bloc existant à la
                                             // liste des successeurs
-                                            // de ce bloc                
+                                            // de ce bloc
+            blocks[basic_block_start_address[next_address]].parents_id.push_back(index_block_parent); //sa position dans le vector est aussi son id
         } else if (far) {  // cas où l'adresse est déjà traitée
-            auto id_basic_bloc_to_split =
-                addr2block[next_address];  // Problème ici Bloc à split
+            auto id_basic_bloc_to_split = addr2block[next_address];  // Problème ici Bloc à split
             size_t split_address = next_address; //renommage pour que cela soit plus clair
             std::cout << "bloc à split est n°" << id_basic_bloc_to_split << "à l'adresse 0x" << std::hex<< split_address << std::dec <<  std::endl;
-            split_BasicBlock(id_basic_bloc_to_split, split_address);
-            std::cout << "index_block "<< index_block << "current_id_block - 1"<< current_id_block - 1 << std::endl; 
-            blocks[index_block].childs_id.push_back(current_id_block - 1);// on a un successeur
-            if(index_block == id_basic_bloc_to_split){
-                blocks[current_id_block-1].childs_id.push_back(current_id_block - 1);   
-            }
+            split_BasicBlock(id_basic_bloc_to_split, split_address, index_block_parent);
         } 
         return 0;
     }
@@ -259,6 +279,7 @@ struct RecursiveDescent {
                 if (insn.id != X86_INS_JMP && insn.id != X86_INS_LJMP) { 
                     bool far = false;
                     init_next_bb(next_address, index_block, far); //ajoute le bb qui commence à l'adresse suivante au vector de cfg
+
                 }
 
                 // le bloc loin
