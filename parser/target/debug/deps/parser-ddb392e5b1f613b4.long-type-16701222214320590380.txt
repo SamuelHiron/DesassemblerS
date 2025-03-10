@@ -1,1 +1,0 @@
-lief::common::Iterator<'_, lief_ffi::autocxx_ffi::bindgen::root::ELF_Binary, lief_ffi::autocxx_ffi::bindgen::root::ELF_Binary_it_symtab_symbols>

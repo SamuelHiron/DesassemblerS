@@ -1,8 +1,0 @@
-[package]
-name = "parser"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-lief = "0.16.3"
-object = "0.36.7"

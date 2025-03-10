@@ -1,0 +1,9 @@
+.vscode/
+
+makefile
+
+build/
+
+
+*.csv
+*.ini

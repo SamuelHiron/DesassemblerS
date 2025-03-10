@@ -1,3 +1,0 @@
-/home/samuel/Documents/DesassemblerS/test/lldb_test/hello-vsc/build/CMakeFiles/hello-vsc.dir
-/home/samuel/Documents/DesassemblerS/test/lldb_test/hello-vsc/build/CMakeFiles/edit_cache.dir
-/home/samuel/Documents/DesassemblerS/test/lldb_test/hello-vsc/build/CMakeFiles/rebuild_cache.dir
