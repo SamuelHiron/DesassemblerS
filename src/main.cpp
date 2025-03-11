@@ -9,7 +9,9 @@
 
 size_t current_id_block ; // On en a besoin pour les 2 structs
 std::unordered_map<size_t, u_int8_t> binary_contents; // On en a besoin aussi dans le main
+using InstructionPtr = std::shared_ptr<cs_insn>;
 int bloc_null = 0;
+
 struct CSH {
     csh handle;
 
@@ -48,7 +50,7 @@ struct BasicBlock {
     bool end;
     std::vector<size_t> childs_id;
     std::vector<size_t> parents_id;
-    std::vector<cs_insn> instructions;
+    std::vector<InstructionPtr> instructions;
     std::unordered_map<uint16_t, std::vector<Position_Registre>> unknown_regs_dependencies; 
     std::unordered_map<uint16_t, Position_Value> known_regs; 
     BasicBlock(size_t start_address)
@@ -73,8 +75,8 @@ struct BasicBlock {
         }
         std::cout<< std::endl;
         for (const auto& insn : instructions) {
-            std::cout << "0x" << std::hex << insn.address << std::dec << ": "
-                      << insn.mnemonic << " " << insn.op_str << std::endl;
+            std::cout << "0x" << std::hex << insn->address << std::dec << ": "
+                      << insn->mnemonic << " " << insn->op_str << std::endl;
         }
         if (instructions.empty()){
             std::cout << std::hex << "\n start_address: 0x" << start_address<< std::dec  << std::endl;
@@ -97,6 +99,7 @@ int replace_id(std::vector<size_t> &parents_id, size_t id_to_supress, size_t id_
 
 
 struct RecursiveDescent {
+
     std::unordered_map<size_t, size_t> basic_block_start_address;
     std::unordered_map<size_t, size_t> addr2block; //address already treated
     std::vector<BasicBlock> blocks;
@@ -148,19 +151,22 @@ struct RecursiveDescent {
     int show_cfg_triskel(){
         auto renderer = triskel::make_svg_renderer();
         auto builder  = triskel::make_layout_builder();
+        int num_insn = 0;
 
         std::ostringstream oss;
-
         // Create nodes for each block
         for(auto block : blocks){
             oss << "Block ID: " << block.id << "\n";
             for (const auto& insn : block.instructions) {
-                oss << "0x" << std::hex << insn.address << std::dec << ": "
-                    << insn.mnemonic << " " << insn.op_str << "\n";
+                oss << num_insn << "\t" <<"0x" << std::hex << insn->address << std::dec << ": "
+                    << insn->mnemonic << " " << insn->op_str << "\n";
+                num_insn++;
             }
             builder->make_node(*renderer, oss.str());
             oss.str(""); // cleans the content
             oss.clear(); //cleans any flag
+            num_insn = 0;
+
         }
 
         //Create edges for each node
@@ -169,45 +175,18 @@ struct RecursiveDescent {
                 builder->make_edge(block.id, child_id);
             }
         }
-
-
-        // builder->make_node("a");
-
-    // builder->measure_nodes(render)
-
-        // auto n1 = builder->make_node(*renderer, nodeLabel);
-        // oss.str(""); // cleans the content
-        // oss.clear(); //cleans any flag
-
-        // oss << "Block ID: " << blocks[1].id << "\n";
-        // for (const auto& insn : blocks[1].instructions) {
-        //     oss << "0x" << std::hex << insn.address << std::dec << ": "
-        //         << insn.mnemonic << " " << insn.op_str << "\n";
-        // }
-        // std::string nodeLabel2 = oss.str();
-        // auto n2 = builder->make_node(*renderer, nodeLabel2);
-        // builder->make_edge(n1, n2);
-
-
-        // Create edges based on control flow
-        // for (const auto& block : blocks) {
-        //     for (const auto& child_id : block.childs_id) {
-        //         builder->make_edge(nodes[block.id], nodes[child_id]);
-        //     }
-        // }
-
         auto layout = builder->build();
         layout->render_and_save(*renderer, "./out.svg");
         return 1;
     }
 
-    int print_instruction_regs_RW(const cs_insn insn){
+    int print_instruction_regs_RW(const InstructionPtr insn){
         uint16_t regs_read[64] = {0};
         uint16_t regs_write[64] = {0} ;
         uint8_t read_count = 0;
         uint8_t write_count = 0;
-        std::cout << "\nProcessing instruction: " << insn.mnemonic << " " << insn.op_str << std::endl;
-        if (cs_regs_access(handle, &insn, regs_read, &read_count, regs_write, &write_count) == CS_ERR_OK) {
+        std::cout << "\nProcessing instruction: " << insn->mnemonic << " " << insn->op_str << std::endl;
+        if (cs_regs_access(handle, insn.get(), regs_read, &read_count, regs_write, &write_count) == CS_ERR_OK) {
             if (read_count > 0) {
                 std::cout << "\tRegisters read:";
                 for (uint8_t i = 0; i < read_count; i++) {
@@ -229,7 +208,7 @@ struct RecursiveDescent {
 }
 
     int split_BasicBlock(size_t id_basic_bloc_to_split, size_t split_address, size_t index_block_parent){
-        std::vector<cs_insn> debut_split_instructions;
+        std::vector<InstructionPtr> debut_split_instructions;
 
         auto block_successor = BasicBlock{split_address, blocks[id_basic_bloc_to_split].childs_id, {index_block_parent}};  // création d'un nouveau bloc
         blocks[id_basic_bloc_to_split].known_regs.clear();
@@ -248,12 +227,12 @@ struct RecursiveDescent {
         int j = 0;
         //les instructions
         while (i< blocks[id_basic_bloc_to_split].instructions.size()){
-            if(blocks[id_basic_bloc_to_split].instructions[i].address < split_address){
+            if(blocks[id_basic_bloc_to_split].instructions[i]->address < split_address){
                 debut_split_instructions.push_back(blocks[id_basic_bloc_to_split].instructions[i]);
                 instruction_RW_regs(blocks[id_basic_bloc_to_split].instructions[i], i, id_basic_bloc_to_split);
                 j++;
             } else {
-                block_successor.instructions.push_back(blocks[id_basic_bloc_to_split].instructions[i]);
+                blocks[block_successor.id].instructions.push_back(blocks[id_basic_bloc_to_split].instructions[i]);
                 instruction_RW_regs(blocks[id_basic_bloc_to_split].instructions[i], i-j, block_successor.id);
             }
             i++;
@@ -261,6 +240,10 @@ struct RecursiveDescent {
 
         //le block split
         blocks[id_basic_bloc_to_split].instructions = debut_split_instructions;
+        for(auto insn : debut_split_instructions){
+            std::cout << "0x" << std::hex << insn->address << std::dec << ": "
+                      << insn->mnemonic << " " << insn->op_str << std::endl;
+        }
         for(auto id_child : blocks[id_basic_bloc_to_split].childs_id){ //on adapte les parents_id de ses enfants
             replace_id(blocks[id_child].parents_id, id_basic_bloc_to_split, block_successor.id);
         }
@@ -269,8 +252,6 @@ struct RecursiveDescent {
         if (id_basic_bloc_to_split != index_block_parent){
             blocks[index_block_parent].childs_id.push_back(block_successor.id);
         }
-
-
         return 0;     
     }
 
@@ -298,7 +279,7 @@ struct RecursiveDescent {
         } else if (far) {  // cas où l'adresse est déjà traitée
             auto id_basic_bloc_to_split = addr2block[next_address];  // Problème ici Bloc à split
             size_t split_address = next_address; //renommage pour que cela soit plus clair
-            std::cout << "bloc à split est n°" << id_basic_bloc_to_split << "à l'adresse 0x" << std::hex<< split_address << std::dec <<  std::endl;
+            std::cout << "bloc à split est n°" << id_basic_bloc_to_split << "à l'adresse 0x" << std::hex<< split_address << std::dec << "\nIl a " << blocks[id_basic_bloc_to_split].instructions.size() << " instructions" << std::endl;
             split_BasicBlock(id_basic_bloc_to_split, split_address, index_block_parent);
         } 
         return 0;
@@ -323,13 +304,13 @@ struct RecursiveDescent {
         }
     }
     
-    int instruction_RW_regs(const cs_insn insn, size_t position_instruction, const size_t index_block){ //split bloc à traiter
+    int instruction_RW_regs(const InstructionPtr insn, size_t position_instruction, const size_t index_block){ //split bloc à traiter
         print_instruction_regs_RW(insn);
         uint16_t regs_read[64] = {0};
         uint16_t regs_write[64] = {0};
         uint8_t read_count = 0;
         uint8_t write_count = 0;
-        if (cs_regs_access(handle, &insn, regs_read, &read_count, regs_write, &write_count) == CS_ERR_OK) {
+        if (cs_regs_access(handle, insn.get(), regs_read, &read_count, regs_write, &write_count) == CS_ERR_OK) {
             bool no_read_unknown = true; // Si le nombre d'inconnu de read = 0
             if (write_count > 0) {
                 //cas où on est pas capable de résoudre la dépendance
@@ -355,7 +336,7 @@ struct RecursiveDescent {
         return 0;
     }   
 
-    // int64_t get_reg_value(const cs_insn insn, const size_t index_block){ // A traiter
+    // int64_t get_reg_value(const InstructionPtr insn, const size_t index_block){ // A traiter
     //     int64_t value;
     //     auto op = insn->detail->x86.operands[0];
     //     std::cout << "Détails instructions" << std::endl;
@@ -388,7 +369,7 @@ struct RecursiveDescent {
 
 
         int i =0; //pour la position de l'instruction
-        while (!blocks[index_block].end && !addr2block.count(current_address)) {  // end par défaut initialisé à false
+        while (!blocks[index_block].end) {  // end par défaut initialisé à false
             // pour etre sur refait pas une lecture de bloc
 
             addr2block[current_address] = index_block;
@@ -397,12 +378,15 @@ struct RecursiveDescent {
             for (size_t i = 0; i < 16; i++) {
                 bytes[i] = binary_contents[current_address + i];
             }
-            cs_insn* insn_tab;
+            cs_insn* raw_pointer;
             size_t count = cs_disasm(handle, bytes.data(), bytes.size(),
-                                     current_address, 1, &insn_tab);
+                                     current_address, 1, &raw_pointer);
             assert(count == 1);  // On s'occupe d'une instruction à la fois et
                                  // ça c'est bien passé
-            auto insn = insn_tab[0];
+
+
+            auto insn = std::shared_ptr<cs_insn>{
+                raw_pointer, [](cs_insn* insn) { cs_free(insn, 1); }};
 
             instruction_RW_regs(insn, i, index_block);
 
@@ -410,33 +394,31 @@ struct RecursiveDescent {
             addr2block[current_address] =
                 blocks[index_block].id;  // on note qu'on a traité cette adresse
             auto next_address =
-                insn.address + insn.size;  // on prépare la prochaine adresse
+                insn->address + insn->size;  // on prépare la prochaine adresse
 
 
-            const auto& op = insn.detail->x86.operands[0];
-            //if(insn.detail->x86.operands.size()>1){
-            const auto& op1 = insn.detail->x86.operands[1];
-            
-            if (cs_insn_group(handle, &insn, CS_GRP_CALL) ||
-                cs_insn_group(handle, &insn, CS_GRP_JUMP)) {
+            const auto& op = insn->detail->x86.operands[0];            
+            if (cs_insn_group(handle, insn.get(), CS_GRP_CALL) ||
+                cs_insn_group(handle, insn.get(), CS_GRP_JUMP)) {
                 blocks[index_block].end = true;              
                 
                 // 2 potentiellement nouveaux blocs à créer
                 // le bloc juste après l'appel commence à next_address
-                if (insn.id != X86_INS_JMP && insn.id != X86_INS_LJMP) { 
+                if (insn->id != X86_INS_JMP && insn->id != X86_INS_LJMP) { 
                     bool far = false;
                     init_next_bb(next_address, index_block, far); //ajoute le bb qui commence à l'adresse suivante au vector de cfg
-
                 }
 
                 // le bloc loin
-                const auto& op = insn.detail->x86.operands[0];
+                const auto& op = insn->detail->x86.operands[0];
                 if (op.type == X86_OP_IMM) {  // cas où l'instruction contient
-                                              // l'adresse de l'appel  
+                                              // l'adresse de l'appel                      init_next_bb(static_cast<size_t>(op.imm), index_block, far);                        
+
                         std::cout << "0x" << std::hex << op.imm << std::dec
                         << "  X86_OP_IMM" << std::endl;   
                     bool far = true;
                     init_next_bb(static_cast<size_t>(op.imm), index_block, far);                        
+                    
                 } else if (op.type == X86_OP_MEM) {
                     std::cout << "0x" << std::hex << std::dec << "  X86_OP_MEM" << std::endl;
                     print_instruction_regs_RW(insn);
@@ -444,16 +426,17 @@ struct RecursiveDescent {
                     std::cout << "0x" << std::hex << std::dec << "  X86_OP_REG" << std::endl;
                 }
                 // std::cout << "CALL ou JUMP" << std::endl;
-            } else if (cs_insn_group(handle, &insn, CS_GRP_RET) ||
-                       cs_insn_group(handle, &insn, CS_GRP_INT)) {
+            } else if (cs_insn_group(handle, insn.get(), CS_GRP_RET) ||
+                       cs_insn_group(handle, insn.get(), CS_GRP_INT)) {
                 // std::cout << "RET ou INT" << std::endl;
                 blocks[index_block].end = true;
             }
             current_address = next_address;
-/* 
-            // cs_free( // my use_after_free
-                insn_tab,
-                count); */  // manière + belle de le faire existe cf Jack's code
+            if (addr2block.count(current_address)){
+                blocks[index_block].childs_id.push_back(addr2block[current_address]);
+                blocks[addr2block[current_address]].parents_id.push_back(index_block);
+                break;
+            }
             i++;
         }
         
