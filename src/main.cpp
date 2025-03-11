@@ -85,7 +85,8 @@ struct BasicBlock {
         }
         fmt::println("" );
         for (const auto& insn : instructions) {
-            fmt::print( "{0:#x}: {} {}", insn->address, std::string_view(insn->mnemonic), std::string_view(insn->op_str));
+            std::cout << "0x" << std::hex <<insn->address << std::dec << ": "<< insn->mnemonic << " " << insn->op_str << std::endl;
+            // fmt::print( "{0:#x}: {} {}", insn->address, insn->mnemonic, insn->op_str);
         }
         if (instructions.empty()) {
             fmt::print(  "\n start_address: {0:#x}", start_address);
@@ -158,7 +159,7 @@ struct RecursiveDescent {
         return 0;
     }
 
-    int show_cfg_triskel() {
+    int show_cfg_triskel(std::string good_name) {
         auto renderer = triskel::make_svg_renderer();
         auto builder  = triskel::make_layout_builder();
         int num_insn  = 0;
@@ -176,7 +177,20 @@ struct RecursiveDescent {
             oss.clear();  // cleans any flag
             num_insn = 0;
         }
-
+        // Create nodes for each block
+        // size_t blocks_index = 0;
+        // while(blocks_index<blocks.size()){
+        //     oss << "Block ID: " <<  blocks[blocks_index].id << "\n";
+        //     for (const auto& insn : blocks[blocks_index].instructions) {
+        //         oss << num_insn << " 0x"<< std::hex << insn->address << std::dec<< ": " <<insn->mnemonic << " "<< insn->op_str << std::endl;
+        //         num_insn++;
+        //     }
+        //     builder->make_node(*renderer, oss.str());
+        //     oss.str("");  // cleans the content
+        //     oss.clear();  // cleans any flag
+        //     num_insn = 0;
+        // }
+            
         // Create edges for each node
         for (auto block : blocks) {
             for (auto child_id : block.childs_id) {
@@ -184,7 +198,7 @@ struct RecursiveDescent {
             }
         }
         auto layout = builder->build();
-        layout->render_and_save(*renderer, "./out.svg");
+        layout->render_and_save(*renderer, good_name);
         return 1;
     }
 
@@ -267,7 +281,8 @@ struct RecursiveDescent {
         // le block split
         blocks[id_basic_bloc_to_split].instructions = debut_split_instructions;
         for (auto insn : debut_split_instructions) {
-            fmt::print( "{0:#x} {} {}", insn->address, insn->mnemonic, insn->op_str);
+            // fmt::print( "{0:#x} {} {}", insn->address, insn->mnemonic, insn->op_str); # TODO
+            std::cout << "0x" << std::hex <<insn->address << std::dec << ": "<< insn->mnemonic << " " << insn->op_str << std::endl;
         }
         for (auto id_child :
              blocks[id_basic_bloc_to_split]
@@ -504,13 +519,29 @@ struct RecursiveDescent {
     }
 };
 
+static auto find_file_name(int argc, char ** argv) -> std::string{
+    std::string input_path = argv[1];  // Chemin du fichier donné en argument
+    size_t found = input_path.find_last_of("/\\");
+    std::string output_filename;
+    if (argc == 3){
+        output_filename = "./out_cfg/" + input_path.substr(found + 1) + ".svg"; 
+    } else {
+        output_filename = "./out_cfg/out.svg"; 
+    }
+    // 🔹 Récupérer juste le nom du fichier sans extension
+
+    // 🔹 Définir le chemin de sortie (dans le même dossier ou un autre dossier)
+    return output_filename;
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
 
-        fmt::print(stderr,"Usage: {} <binary>", argv[0]);
+        fmt::print(stderr,"Usage: {} <binary> ?<arg to get a name>", argv[0]);
         return 1;
     }
 
+    std::string good_name = find_file_name(argc, argv);
     // Parse the ELF binary
     std::unique_ptr<LIEF::ELF::Binary> binary =
         LIEF::ELF::Parser::parse(argv[1]);
@@ -535,7 +566,7 @@ int main(int argc, char** argv) {
     RecursiveDescent rd;
     rd.binary = std::move(binary);
     rd.init_cfg();
-    rd.show_cfg_triskel();
+    rd.show_cfg_triskel(good_name);
 
     return 0;
 }

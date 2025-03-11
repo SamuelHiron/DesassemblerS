@@ -4,6 +4,7 @@ makefile
 
 build/
 
+out_cfg/
 
 *.csv
 *.ini
