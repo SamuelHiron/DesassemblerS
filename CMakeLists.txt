@@ -12,15 +12,14 @@ include(FetchContent) # Used to download and include external projects at config
 set(CMAKE_CXX_STANDARD 23) # project uses C++23, 
 set(CMAKE_CXX_STANDARD_REQUIRED True) # and this standard is required.
 
-
-# FetchContent_Declare(
-#     fmt
-#     GIT_REPOSITORY https://github.com/fmtlib/fmt
-#     GIT_TAG        1c9fce2ffefecfdce794e1859584e25877b7b592
-#     FIND_PACKAGE_ARGS
-# ) # 12.0.2
-# FetchContent_MakeAvailable(fmt)
-# message(STATUS "Found fmt version ${fmt_VERSION}")
+# find_package(fmt REQUIRED)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt
+    GIT_TAG        1c9fce2ffefecfdce794e1859584e25877b7b592
+    FIND_PACKAGE_ARGS
+) # 12.0.2
+FetchContent_MakeAvailable(fmt)
 
 
 # if(ENABLE_TESTING)
@@ -57,4 +56,5 @@ target_link_libraries(desassam PRIVATE
     triskel
     LIEF::LIEF
     ${CAPSTONE_LIBRARIES}
+    fmt::fmt
 )# link the executable to the LIEF library, format library and capstone 
