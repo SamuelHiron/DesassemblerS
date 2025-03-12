@@ -8,3 +8,5 @@ out_cfg/
 
 *.csv
 *.ini
+
+results.txt
