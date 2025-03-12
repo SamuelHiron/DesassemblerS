@@ -1,8 +1,11 @@
 #include <capstone/capstone.h>
 #include <fmt/base.h>
 #include <strings.h>
+#include <cstddef>
 #include <iostream>
+#include <new>
 #include <sstream>
+#include <string>
 #include <triskel/triskel.hpp>
 #include <unordered_map>
 #include <utility>
@@ -151,7 +154,7 @@ struct RecursiveDescent {
             print_known_regs(blocks[i].known_regs);
         }
         fmt::print( "\n________________________________________________"
-                     "\n\nFin de l'exploration");
+                     "\n\nFin de l'exploration\n");
         fmt::println( "Nombre de blocs trouvés: {}",  blocks.size());
         for (const auto& block : blocks) {
             block.print_BasicBlock();
@@ -159,47 +162,63 @@ struct RecursiveDescent {
         return 0;
     }
 
-    int show_cfg_triskel(std::string good_name) {
-        auto renderer = triskel::make_svg_renderer();
-        auto builder  = triskel::make_layout_builder();
-        int num_insn  = 0;
+    int show_cfg_triskel_each_graph(const std::string& good_name){
+        int nb_graph = 0;
+        for(const auto &block: blocks){
+            if(block.parents_id.size() == 0){ // attention block parent
+                //c'est un root
+                std::unordered_map<size_t, size_t> block_deja_vus;
+                auto renderer = triskel::make_svg_renderer();
+                auto builder  = triskel::make_layout_builder();
 
-        std::ostringstream oss;
-        // Create nodes for each block
-        for (auto block : blocks) {
-            oss << "Block ID: " <<  block.id << "\n";
-            for (const auto& insn : block.instructions) {
-                oss << num_insn << " 0x"<< std::hex << insn->address << std::dec<< ": " <<insn->mnemonic << " "<< insn->op_str << std::endl;
-                num_insn++;
+                //parcours des enfants pour choper tous les bb
+                std::vector<size_t> blocks_id;
+                size_t index_graph = 0;
+                find_every_successors(block.id, index_graph ,blocks_id, block_deja_vus);
+                int num_insn  = 0;
+                std::ostringstream oss; //remplacer par fmt::format
+                // Create nodes for each block
+                for(auto index_block: blocks_id){
+                    fmt::print("id : {} graphid: {}\n", index_block, block_deja_vus[index_block]);
+                    oss << "Block ID: " <<  index_block << "\n";
+                    for (const auto& insn : blocks[index_block].instructions) {
+                        oss << num_insn << " 0x"<< std::hex << insn->address << std::dec<< ": " <<insn->mnemonic << " "<< insn->op_str << std::endl;
+                        num_insn++;
+                    }
+                    builder->make_node(*renderer, oss.str());
+                    oss.str("");  // cleans the content
+                    oss.clear();  // cleans any flag
+                    num_insn = 0;
+                }
+                fmt::print("\nLes arretes sont :\n");
+                for (auto index_block: blocks_id) {
+                    for (auto child_id : blocks[index_block].childs_id) {
+                        fmt::print("ids: {} -> {} donc graph_ids ", index_block, child_id);
+                        fmt::println("{} -> {}", block_deja_vus[index_block], block_deja_vus[child_id]);
+                        builder->make_edge(block_deja_vus[index_block], block_deja_vus[child_id]);
+                    }
+                }
+                std::string new_name = good_name + std::to_string(nb_graph) + ".svg";
+                auto layout = builder->build();
+                layout->render_and_save(*renderer, new_name);
+                nb_graph++;
             }
-            builder->make_node(*renderer, oss.str());
-            oss.str("");  // cleans the content
-            oss.clear();  // cleans any flag
-            num_insn = 0;
         }
-        // Create nodes for each block
-        // size_t blocks_index = 0;
-        // while(blocks_index<blocks.size()){
-        //     oss << "Block ID: " <<  blocks[blocks_index].id << "\n";
-        //     for (const auto& insn : blocks[blocks_index].instructions) {
-        //         oss << num_insn << " 0x"<< std::hex << insn->address << std::dec<< ": " <<insn->mnemonic << " "<< insn->op_str << std::endl;
-        //         num_insn++;
-        //     }
-        //     builder->make_node(*renderer, oss.str());
-        //     oss.str("");  // cleans the content
-        //     oss.clear();  // cleans any flag
-        //     num_insn = 0;
-        // }
-            
-        // Create edges for each node
-        for (auto block : blocks) {
-            for (auto child_id : block.childs_id) {
-                builder->make_edge(block.id, child_id);
+        return 0;
+    }
+
+    int find_every_successors(size_t index_block, size_t &index_graph,std::vector<size_t> &blocks_id, std::unordered_map<size_t, size_t> &block_deja_vus){
+        if(!block_deja_vus.contains(index_block)){
+            blocks_id.push_back(index_block);
+            block_deja_vus[index_block] = index_graph;
+            index_graph++;
+        }
+        for(auto child_id : blocks[index_block].childs_id){
+            if(!block_deja_vus.contains(child_id)){
+                find_every_successors(child_id, index_graph, blocks_id, block_deja_vus);
             }
         }
-        auto layout = builder->build();
-        layout->render_and_save(*renderer, good_name);
-        return 1;
+        return 0;
     }
 
     int print_instruction_regs_RW(const InstructionPtr insn) {
@@ -523,10 +542,14 @@ static auto find_file_name(int argc, char ** argv) -> std::string{
     std::string input_path = argv[1];  // Chemin du fichier donné en argument
     size_t found = input_path.find_last_of("/\\");
     std::string output_filename;
-    if (argc == 3){
-        output_filename = "./out_cfg/" + input_path.substr(found + 1) + ".svg"; 
+    if (argc == 3 && std::strcmp(argv[2], "asm") == 0){
+        output_filename = "./out_cfg/asm/" + input_path.substr(found + 1) + "_"; 
+    } else if(argc == 3 && std::strcmp(argv[2], "C") == 0){
+        output_filename = "./out_cfg/C/" + input_path.substr(found + 1)+"_"; 
+    } else if(argc == 3 && std::strcmp(argv[2], "distro") == 0){
+        output_filename = "./out_cfg/distro/" + input_path.substr(found + 1)+"_"; 
     } else {
-        output_filename = "./out_cfg/out.svg"; 
+        output_filename = "./out_cfg/test/out"; 
     }
     // 🔹 Récupérer juste le nom du fichier sans extension
 
@@ -537,7 +560,7 @@ static auto find_file_name(int argc, char ** argv) -> std::string{
 int main(int argc, char** argv) {
     if (argc < 2) {
 
-        fmt::print(stderr,"Usage: {} <binary> ?<arg to get a name>", argv[0]);
+        fmt::print(stderr,"Usage: {} <binary> asm|C|", argv[0]);
         return 1;
     }
 
@@ -566,7 +589,8 @@ int main(int argc, char** argv) {
     RecursiveDescent rd;
     rd.binary = std::move(binary);
     rd.init_cfg();
-    rd.show_cfg_triskel(good_name);
+    fmt::println("\n___________________________\nOutil de Jack");
+    rd.show_cfg_triskel_each_graph(good_name);
 
     return 0;
 }
