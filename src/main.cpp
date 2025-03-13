@@ -11,6 +11,7 @@
 #include <utility>
 #include "LIEF/LIEF.hpp"
 #include "x86.h"
+#include <fmt/format.h>
 
 size_t current_id_block;  // On en a besoin pour les 2 structs
 std::unordered_map<size_t, u_int8_t>
@@ -172,38 +173,37 @@ struct RecursiveDescent {
         return 0;
     }
 
-    int show_cfg_triskel_each_graph(const std::string& good_name){
+    int build_CFGs_triskel(const std::string& good_name){
         int nb_graph = 0;
         for(auto &block: blocks){
             if(block.parents_id.size() == 0 || block.function_start){ // attention block parent ou function = root
-                                //parcours des enfants pour choper tous les bb
+                //parcours des enfants pour choper tous les bb
                 std::unordered_map<size_t, size_t> block_deja_vus;
-
                 std::vector<size_t> blocks_id;
                 size_t index_graph = 0;
-                find_every_successors(block.id, index_graph ,blocks_id, block_deja_vus);
+                find_every_successors(block.id, index_graph ,blocks_id, block_deja_vus); // On obtient tous les ids des blocks enfant de block
                 if(blocks_id.size() < 500){ 
+
                     auto renderer = triskel::make_svg_renderer();
                     auto builder  = triskel::make_layout_builder();
 
                     int num_insn  = 0;
-                    std::ostringstream oss; //remplacer par fmt::format
                     // Create nodes for each block
                     for(auto index_block: blocks_id){
+                        num_insn = 0;
+                        std::string oss = ""; //remplacer par fmt::format
                         fmt::print("id : {} graphid: {}\n", index_block, block_deja_vus[index_block]);
                         if(index_block == block.id){
-                            oss << "Root of the Graph\n";
+                            oss += "Root of the Graph\n";
                         }
-                        oss << "Block ID: " <<  index_block << "\n";
+                        oss += fmt::format("Block ID: {}\n", index_block);
                         for (const auto& insn : blocks[index_block].instructions) {
-                            oss << num_insn << " 0x"<< std::hex << insn->address << std::dec<< ": " <<insn->mnemonic << " "<< insn->op_str << std::endl;
+                            oss += fmt::format("{} {:#x}: {} {}\n", num_insn, insn->address, insn->mnemonic, insn->op_str);
                             num_insn++;
                         }
-                        builder->make_node(*renderer, oss.str());
-                        oss.str("");  // cleans the content
-                        oss.clear();  // cleans any flag
-                        num_insn = 0;
-                    }
+                        builder->make_node(*renderer, oss);
+                          // cleans any flag
+                     }
                     fmt::print("\nLes arretes sont :\n");
                     for (auto index_block: blocks_id) {
                         if(block.id == index_block || !blocks[index_block].function_start){
@@ -726,7 +726,7 @@ int main(int argc, char** argv) {
     rd.print_CFGs();
     rd.print_dependencies_same_bb();
     fmt::println("\n___________________________\nOutil de Jack");
-    rd.show_cfg_triskel_each_graph(good_name);
+    rd.build_CFGs_triskel(good_name);
 
     return 0;
 }
