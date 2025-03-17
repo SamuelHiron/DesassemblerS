@@ -57,4 +57,16 @@ target_link_libraries(desassam PRIVATE
     LIEF::LIEF
     ${CAPSTONE_LIBRARIES}
     fmt::fmt
-)# link the executable to the LIEF library, format library and capstone 
+)# link the executable to the LIEF library, format library and capstone
+
+
+# target_compile_options(desassam PRIVATE 
+#     -Wall 
+#     -Wextra 
+#     -Wuninitialized
+#     -fsanitize=undefined,address
+# )
+
+# target_link_options(desassam PRIVATE 
+#     -fsanitize=undefined,address
+# )

@@ -2,13 +2,14 @@
 #include <fmt/base.h>
 #include <strings.h>
 #include <cstddef>
+#include <cstdio>
 #include <iostream>
-#include <new>
-#include <sstream>
 #include <string>
 #include <triskel/triskel.hpp>
 #include <unordered_map>
 #include <utility>
+#include "LIEF/Abstract/Section.hpp"
+#include "LIEF/ELF/Segment.hpp"
 #include "LIEF/LIEF.hpp"
 #include "x86.h"
 #include <fmt/format.h>
@@ -63,26 +64,29 @@ struct BasicBlock {
         unknown_regs_dependencies;
     std::unordered_map<size_t, Position_Value> known_regs;
     BasicBlock(size_t start_address)
-        : id(current_id_block),
+        : function_start(false),
+          id(current_id_block),
           start_address(start_address),
-                    end(false) {
+          end(false) {
         current_id_block++;
     }
     BasicBlock(size_t start_address, bool function_start)
-        : id(current_id_block),
-        function_start(function_start),
-        start_address(start_address),
-                    end(false) {
+        : function_start(function_start),
+         id(current_id_block),
+         start_address(start_address),
+         end(false) {
         current_id_block++;
     }
     BasicBlock(size_t start_address,
                std::vector<size_t> childs_id,
                std::vector<size_t> parents_id)
-        : id(current_id_block),
+        : function_start(false),
+          id(current_id_block),
           start_address(start_address),
+          end(false),
           childs_id(std::move(childs_id)),
-          parents_id(std::move(parents_id)),
-          end(false) {
+          parents_id(std::move(parents_id))
+           {
         current_id_block++;
     }
 
@@ -112,11 +116,20 @@ struct BasicBlock {
 int replace_id(std::vector<size_t>& parents_id,
                size_t id_to_supress,
                size_t id_to_add) {
-    for (int i = 0; i < parents_id.size(); i++) {
+    for (size_t i = 0; i < parents_id.size(); i++) {
         if (parents_id[i] == id_to_supress) {
             parents_id[i] = id_to_add;
         }
     }
+    return 0;
+}
+
+
+int fill_bitmap(std::unordered_map<size_t, size_t>& bitmap, size_t start_address, size_t size, size_t value) {
+    for(size_t address = start_address; address< start_address + size; address++){
+            bitmap[address] = value;
+    }
+ 
     return 0;
 }
 
@@ -137,15 +150,15 @@ struct RecursiveDescent {
             blocks.push_back({function.address()});
             basic_block_start_address[function.address()] =
                 current_id_block - 1;
-        fmt::print(  "{} functions found \n",  blocks.size() - 1  );
+        //fmt::print(  "{} functions found \n",  blocks.size() - 1  );
         }
         return 0;
     }
     
-    int recursive_descent(){
-        int index_block = 0;
+    int recursive_descent(std::unordered_map<size_t, size_t>& bitmap){
+        size_t index_block = 0;
         while (index_block != blocks.size()) {
-            explore_BasicBlock(index_block);
+            explore_BasicBlock(index_block, bitmap);
             index_block++;
         }
         return 0;
@@ -162,12 +175,12 @@ struct RecursiveDescent {
 
     int print_dependencies_same_bb(){
         fmt::print("\n_______________________________________________\n\n");
-        fmt::print( "Analyse VSA:\n");
-        for (int i = 0; i < blocks.size(); i++) {
-            fmt::print("\nBlock {} Dependencies:", i);
+        fmt::println( "Analyse VSA:\n");
+        for (size_t i = 0; i < blocks.size(); i++) {
+            fmt::println("\nBlock {} Dependencies:", i);
             print_unknown_regs_dependencies(
                 blocks[i].unknown_regs_dependencies);
-            fmt::print( "Block {} Known Regs:", i);
+            fmt::println( "\nBlock {} Known Regs:", i);
             print_known_regs(blocks[i].known_regs);
         }
         return 0;
@@ -178,12 +191,14 @@ struct RecursiveDescent {
         int nb_trop_grand = 0;
         for(auto &block: blocks){
             if(block.parents_id.size() == 0 || block.function_start){ // attention block parent ou function = root
+                fmt::println("block.parents_id.size = {},  block.function_start = {}", block.parents_id.size(), block.function_start);
                 //parcours des enfants pour choper tous les bb
                 std::unordered_map<size_t, size_t> block_deja_vus;
                 std::vector<size_t> blocks_id;
                 size_t index_graph = 0;
                 find_every_successors(block.id, index_graph ,blocks_id, block_deja_vus); // On obtient tous les ids des blocks enfant de block
-                if(blocks_id.size() < 125){//Evite un graph trop grand
+                if(blocks_id.size() < 127){//Evite un graph trop grand
+                    fmt::println("root_block address = {} & nb_graph {}", block.start_address, nb_graph);
                     auto renderer = triskel::make_svg_renderer();
                     auto builder  = triskel::make_layout_builder();
                     int num_insn  = 0;
@@ -223,14 +238,14 @@ struct RecursiveDescent {
                     auto builder  = triskel::make_layout_builder();
                     int num_insn  = 0;
                     // Create nodes for each block
-                    fmt::println("\nLes nodes du graphe {} sont :", nb_graph);
+                    // fmt::println("\nLes nodes du graphe {} sont :", nb_graph);
                     // for(size_t index_block=0; index_block <= block.childs_id.size(); index_block++){
                     //     num_insn = 0;
                     std::string oss; 
-                    fmt::println("Root too Big id : {} == {} graphid: {} ", block.id, blocks_id[0], block_deja_vus[block.id]);
+                    // fmt::println("Root too Big id : {} == {} graphid: {} ", block.id, blocks_id[0], block_deja_vus[block.id]);
                     oss += "Root of the Graph Too Big \n";
                     oss+= fmt::format("nb_enfants {} | nb de noeuds {}", block.childs_id.size(), blocks_id.size());
-                    oss += fmt::format("Block ID: {}\n", block.id);//index_block);
+                    // oss += fmt::format("Block ID: {}\n", block.id);//index_block);
                     for (const auto& insn : block.instructions){//index_block].instructions) {
                         oss += fmt::format("{} {:#x}: {} {}\n", num_insn, insn->address, insn->mnemonic, insn->op_str);
                         num_insn++;
@@ -238,7 +253,7 @@ struct RecursiveDescent {
                     builder->make_node(*renderer, oss);
 
                     for(size_t i = 0; i< block.childs_id.size(); i++){
-                        fmt::print(" {} == {}  => graphid :{}  |", block.childs_id[i], blocks_id[i+1], block_deja_vus[blocks_id[i+1]]);
+                        // fmt::print(" {} == {}  => graphid :{}  |", block.childs_id[i], blocks_id[i+1], block_deja_vus[blocks_id[i+1]]);
                         std::string oss;
                         oss += "Child root graph too big";
                         for (const auto& insn : blocks[block.childs_id[i]].instructions){//index_block].instructions) {
@@ -264,9 +279,13 @@ struct RecursiveDescent {
         return 0;
     }
 
-    int find_every_successors(size_t index_block, size_t &index_graph,std::vector<size_t> &blocks_id, std::unordered_map<size_t, size_t> &block_deja_vus){
+    int find_every_successors(const size_t & index_block, size_t &index_graph, std::vector<size_t> &blocks_id, std::unordered_map<size_t, size_t> &block_deja_vus){
         if(!block_deja_vus.contains(index_block)){
             blocks_id.push_back(index_block);
+            if (index_block >= blocks.size()) {
+                fmt::println(stderr, "Erreur: index_block hors limites: {}", index_block);
+                return -1;
+            }
             if(!blocks[index_block].function_start) {
                 block_deja_vus[index_block] = index_graph;
             } else {
@@ -274,7 +293,14 @@ struct RecursiveDescent {
             }
             index_graph++;
         }
-        for(auto child_id : blocks[index_block].childs_id){
+        if (blocks[index_block].childs_id.size()== 0){
+            return 0;
+        }
+        for(const auto child_id : blocks[index_block].childs_id){
+            if (child_id >= blocks.size()) {
+                fmt::println(stderr, "Erreur: index_block hors limites: {}", child_id);
+                return -1;
+            }
             if(!block_deja_vus.contains(child_id) && !blocks[child_id].function_start){
                 find_every_successors(child_id, index_graph, blocks_id, block_deja_vus);
             }
@@ -282,7 +308,7 @@ struct RecursiveDescent {
         return 0;
     }
 
-    int print_instruction_regs_RW(const InstructionPtr insn) {
+    int print_instruction_regs_RW(const InstructionPtr & insn) {
         uint16_t regs_read[64]  = {0};
         uint16_t regs_write[64] = {0};
         uint8_t read_count      = 0;
@@ -335,8 +361,8 @@ struct RecursiveDescent {
             blocks[block_successor.id].childs_id.push_back(block_successor.id);
         }
 
-        int i = 0;
-        int j = 0;
+        size_t i = 0;
+        size_t j = 0;
         // les instructions
         while (i < blocks[id_basic_bloc_to_split].instructions.size()) {
             if (blocks[id_basic_bloc_to_split].instructions[i]->address <
@@ -359,10 +385,9 @@ struct RecursiveDescent {
 
         // le block split
         blocks[id_basic_bloc_to_split].instructions = debut_split_instructions;
-        for (auto insn : debut_split_instructions) {
-            // fmt::print( "{0:#x} {} {}", insn->address, insn->mnemonic, insn->op_str); # TODO
-            std::cout << "0x" << std::hex <<insn->address << std::dec << ": "<< insn->mnemonic << " " << insn->op_str << std::endl;
-        }
+        // for (auto insn : debut_split_instructions) {
+        //     fmt::print( "{:#x} {} {}", insn->address, insn->mnemonic, insn->op_str);
+        // }
         for (auto id_child :
              blocks[id_basic_bloc_to_split]
                  .childs_id) {  // on adapte les parents_id de ses enfants
@@ -418,7 +443,7 @@ struct RecursiveDescent {
                 addr2block[next_address];  // Problème ici Bloc à split
             size_t split_address =
                 next_address;  // renommage pour que cela soit plus clair
-            fmt::print( "bloc à split est n° {0:d} à l'adresse {0:#x}", id_basic_bloc_to_split, split_address);
+            //fmt::print( "bloc à split est n° {0:d} à l'adresse {0:#x}", id_basic_bloc_to_split, split_address);
             split_BasicBlock(id_basic_bloc_to_split, split_address, index_block_parent); // Interogation call ?
         }
         return 0;
@@ -427,37 +452,40 @@ struct RecursiveDescent {
     void print_unknown_regs_dependencies(
         const std::unordered_map<uint16_t, std::vector<Position_Registre>>&
             unknown_regs_dependencies) {
+        fmt::println("Dependencies:");
         for (const auto& pair : unknown_regs_dependencies) {
             uint16_t reg                                      = pair.first;
             const std::vector<Position_Registre>& dependances = pair.second;
-            fmt::print( "Registre: {}\n", cs_reg_name(handle, reg));
+            fmt::println( " Registre: {}", cs_reg_name(handle, reg));
             for (const auto& dependance : dependances) {
-                fmt::print("  Position_Instr: {}, Registre: {}", dependance.position, cs_reg_name(handle, dependance.registre));
+                fmt::println("  Position_Instr: {}, Registre: {}", dependance.position, cs_reg_name(handle, dependance.registre));
             }
         }
     }
 
     void print_known_regs(
         const std::unordered_map<size_t, Position_Value>& known_regs) {
+        fmt::println("Known regs:");
         for (const auto& pair : known_regs) {
             uint16_t reg = pair.first;
-            fmt::println("Registre: {}",  cs_reg_name(handle, reg));
+            fmt::println(" Registre: {}",  cs_reg_name(handle, reg));
             fmt::println( "  Position_Instr: {}, Value: {}",  pair.second.position, pair.second.value);
         }
     }
 
-    int instruction_RW_regs(const InstructionPtr insn,
+    int instruction_RW_regs(const InstructionPtr& insn,
                             size_t position_instruction,
                             const size_t index_block) {  // split bloc à traiter
         uint16_t regs_read[64]  = {0};
         uint16_t regs_write[64] = {0};
         uint8_t read_count      = 0;
-        uint8_t write_count     = 0;
+        uint8_t write_count     = 0;            
+        print_instruction_regs_RW(insn);
         if (cs_regs_access(handle, insn.get(), regs_read, &read_count,
                            regs_write, &write_count) == CS_ERR_OK) {
             bool no_read_unknown = true;  // Si le nombre d'inconnu de read = 0
             if (write_count > 0) {
-                // cas où on est pas capable de résoudre la dépendance
+                // on voit si on est  capable de résoudre la dépendance
                 for (uint8_t k = 0; k < write_count; k++) {
                     for (uint8_t l = 0; l < read_count; l++) {
                         if (!blocks[index_block].known_regs.contains(
@@ -469,11 +497,8 @@ struct RecursiveDescent {
                             no_read_unknown = false;
                         }
                     }
-                    if (no_read_unknown) {
-                        // print_known_regs(blocks[index_block].known_regs);
-                        print_instruction_regs_RW(insn);
-                        size_t value = get_reg_value(insn, index_block, position_instruction,regs_write[k]); // cas où float et pas déterminable avec instruction
-
+                    if (no_read_unknown) { // si on est capable on update
+                        size_t value = x86_get_reg_value(insn, index_block, position_instruction,regs_write[k]); // cas où float et pas déterminable avec instruction
                         if (blocks[index_block].unknown_regs_dependencies.contains(
                                 regs_write[k])) {
                             blocks[index_block].unknown_regs_dependencies.erase(
@@ -488,9 +513,9 @@ struct RecursiveDescent {
 
 
 
-    size_t get_reg_value(const InstructionPtr &insn, const size_t index_block, size_t position_instruction, size_t regs_write_value){ // A traiter
+    size_t x86_get_reg_value(const InstructionPtr &insn, const size_t index_block, size_t position_instruction, size_t regs_write_value){ // A traiter
         size_t value = 0;
-        fmt::print("Analyse Instruction mem value");
+        fmt::println("Analyse Instruction mem value");
         if (insn->id == X86_INS_MOV){
             auto op0 =insn->detail->x86.operands[0];
             auto op1 = insn->detail->x86.operands[1];
@@ -513,55 +538,22 @@ struct RecursiveDescent {
                 }
             } 
         }
-        // int i = 0;
-        // for(auto op : insn->detail->x86.operands){
-        //     if(op0.type == X86_OP_IMM){
-        //         fmt::print("\nValue de l'op n°{}  = {:x} ",i, op0.imm);
-        //     } else if(op0.type == X86_OP_INVALID) {
-        //         continue;
-        //     } else if(op0.type == X86_OP_REG) {
-        //         fmt::print( "\nRegister: {}", cs_reg_name(handle,op0.reg));
-        //     } else if(op0.type== X86_OP_MEM){
-        //         fmt::print("\nPlus DUR");
-        //         fmt::print( "\nDétails instructions op: {} ", i  );
-        //         std::string reg_base;
-        //         if (cs_reg_name(handle, op0.mem.base)){
-        //             reg_base = cs_reg_name(handle, op0.mem.base);
-        //             fmt::print( "Base Register: {}", reg_base);
-        //         }
-        //         if ( cs_reg_name(handle, op0.mem.index) != NULL){
-        //             fmt::print( "Index"  );
-        //         }
-        //         fmt::print( "Scale: {}", op0.mem.scale  );
-        //         fmt::print( "Displacement: {}",  op0.mem.disp  );
-        //         if ( cs_reg_name(handle, op0.mem.segment) != NULL){
-        //             fmt::print( "Segment"  );
-        //         }
-        //     }
-        //     i++;
-        // }
         blocks[index_block].known_regs[regs_write_value] = {position_instruction, value};
         fmt::println("\n");
         return value;
     }
 
-    int explore_BasicBlock(const int index_block) {
-        // fmt::print( "Exploring Basic Block "  blocks[index_block].id 
-        // );
-        // if(index_block> 1000) {
-        //     fmt::print("Trop de bloc dans ce graphe, fonction à trouver");
-        //     return 0;
-        // }
+    int explore_BasicBlock(const int index_block, std::unordered_map<size_t, size_t> &bitmap) {
         auto current_address = blocks[index_block].start_address;
         if (addr2block.contains(current_address)) {
-            fmt::print( "Ce block {} a déjà vu cette addresse {}", addr2block[current_address],  current_address);
+            //fmt::print( "Ce block {} a déjà vu cette addresse {}", addr2block[current_address],  current_address);
             blocks[index_block].end = true;  // dans le cas split d'un bloc déjà vu
         }
 
         int position_instruction = 0;                          // pour la position de l'instruction & ne pas aller trop loin je pourrai mettre zone RX
         while (!blocks[index_block].end && position_instruction<200) {  // end par défaut initialisé à false, position_instruction pour éviter le crash
             // pour etre sur refait pas une lecture de bloc
-
+            
             addr2block[current_address] = index_block;
             fmt::println( "Exploring address: {0:#x}",  current_address);  // On décode 1 instruction
             std::array<u_int8_t, 16> bytes;
@@ -578,24 +570,24 @@ struct RecursiveDescent {
                 raw_pointer, [](cs_insn* insn) { cs_free(insn, 1); }};
 
             instruction_RW_regs(insn, position_instruction, index_block);
-
+            
+            print_unknown_regs_dependencies(blocks[index_block].unknown_regs_dependencies);
+            print_known_regs(blocks[index_block].known_regs);
             blocks[index_block].instructions.push_back(insn);  // on la stocke
             addr2block[current_address] =
                 blocks[index_block].id;  // on note qu'on a traité cette adresse
             auto next_address =
                 insn->address + insn->size;  // on prépare la prochaine adresse
-
-            const auto& op = insn->detail->x86.operands[0];
+            fill_bitmap(bitmap, insn->address, insn->size, 1);
             if (cs_insn_group(handle, insn.get(), CS_GRP_CALL) ||
                 cs_insn_group(handle, insn.get(), CS_GRP_JUMP)) {
                 bool function_start = false;
-
+                bool mandatory_jump = true;
                 blocks[index_block].end = true;
-
-                // 2 potentiellement nouveaux blocs à créer
-                // le bloc juste après l'appel commence à next_address
-                if (insn->id != X86_INS_JMP && insn->id != X86_INS_LJMP) {
+                //supprimer tous les jmp par contre prendre en compte tout ce qui est jmp conditionnel jz...
+                if (insn->id != X86_INS_JMP && insn->id != X86_INS_LJMP) { 
                     bool far = false;
+                    mandatory_jump = false;
                     init_next_bb(next_address, index_block,
                                  far, function_start);  // ajoute le bb qui commence à l'adresse
                                         // suivante au vector de cfg
@@ -608,25 +600,28 @@ struct RecursiveDescent {
                                               // init_next_bb(static_cast<size_t>(op0.imm),
                                               // index_block, far);
 
-                    fmt::print( "{0:#x} X86_OP_IMM", op0.imm);
+                    //fmt::print( "{0:#x} X86_OP_IMM", op0.imm);
                     bool far = true;
                     if (cs_insn_group(handle, insn.get(), CS_GRP_CALL)) {
                         function_start = true;
                     }
-                    init_next_bb(static_cast<size_t>(op0.imm), index_block, far, function_start);
+                    if(next_address != static_cast<size_t>(op0.imm) || mandatory_jump){
+                        init_next_bb(static_cast<size_t>(op0.imm), index_block, far, function_start);
+                    }
+
 
                 } else if (op0.type == X86_OP_MEM) {
                     print_known_regs(blocks[index_block].known_regs);
-                    print_X86_OP(op0);
+                    print_x86_op(op0);
                     auto op1 = insn->detail->x86.operands[1];
-                    print_X86_OP(op1);
-                    size_t jmp_address = find_block_address_op(op0, index_block);
+                    print_x86_op(op1);
+                    size_t jmp_address = x86_find_block_address_op(op0, index_block);
                     fmt::println("jump address 0x{:x}", jmp_address);
                     bool far = true;
                     if (cs_insn_group(handle, insn.get(), CS_GRP_CALL)) {
                         function_start = true;
                     }
-                    if(op1.type == X86_OP_INVALID && jmp_address != 0){
+                    if(op1.type == X86_OP_INVALID && jmp_address != 0 && (next_address != jmp_address || mandatory_jump) ){
                         init_next_bb(jmp_address, index_block, far, function_start);
                     }
                 } else if (op0.type == X86_OP_REG) {
@@ -653,7 +648,7 @@ struct RecursiveDescent {
     }
 
 
-    void print_X86_OP(const cs_x86_op op){
+    void print_x86_op(const cs_x86_op op){
         if (op.type == X86_OP_MEM){
             fmt::println( " Plus DUR X86_OP_MEM => Détails instructions operand :");
             if (cs_reg_name(handle, op.mem.base)!= NULL){
@@ -677,7 +672,7 @@ struct RecursiveDescent {
         }            
     }
 
-    size_t find_block_address_op(const cs_x86_op op, size_t index_block){
+    size_t x86_find_block_address_op(const cs_x86_op op, size_t index_block){
         // Base Register+(Index Register×Scale Factor)+Displacement
         size_t value = 0;
         if (cs_reg_name(handle, op.mem.base)!= NULL){ // Base Register
@@ -729,7 +724,6 @@ static auto name_file_output(const int &argc, char ** &argv) -> std::string{
 
 
 
-
 int main(int argc, char** argv) {
     if (argc < 2) {
         fmt::print(stderr,"Usage: {} <binary> asm|C|", argv[0]);
@@ -745,24 +739,45 @@ int main(int argc, char** argv) {
         fmt::print(stderr, "Failed to parse binary!");
         return 1;
     }
-
+    const auto entrypoint = binary->entrypoint();
+    fmt::println( "Entry Point: {0:#x}", entrypoint);
+    std::unordered_map<size_t, size_t> bitmap; //to see if the analysis left out some bits
+    const auto segments = binary->segments();
     // Chargement du Binaire
-    for (const LIEF::ELF::Segment& segment : binary->segments()) {
-        if (segment.type() == LIEF::ELF::Segment::TYPE::LOAD) {
+    for (const LIEF::ELF::Segment& segment : segments) {
+        if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) {
             for (size_t i = 0; i < segment.physical_size(); i++) {
                 binary_contents[segment.virtual_address() + i] =
                     segment.content()[i];
             }
-        }
+            fmt::println("Code Segment : start address={:#x}, end address={:#x}", segment.virtual_address(), segment.virtual_address() + segment.virtual_size());
+            fill_bitmap(bitmap, segment.virtual_address(), segment.virtual_size(), 0);
+       }
     }
-
     // Print binary type and entry point
-    fmt::println( "Entry Point: {0:#x}", binary->entrypoint());
     RecursiveDescent rd;
     rd.binary = std::move(binary);
     rd.find_CFGs_entrypoints();
-    rd.recursive_descent();
-    rd.print_CFGs();
+    fmt::print(  "{} functions found \n",  rd.blocks.size() - 1  );
+    rd.recursive_descent(bitmap);
+    fill_bitmap(bitmap, entrypoint, 1, 8);
+    // fmt::println("\n-------------------------------------\nBitmap Analysis");
+    // size_t empty_bits = 0;
+    // size_t len_all_bits = 0;
+    // for (const LIEF::ELF::Segment& segment : segments) {
+    //     if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) {
+    //         fmt::print("\nsegment start address {:#x}  |  ", segment.virtual_address());
+    //         for (size_t i = 0; i < segment.physical_size(); i++) {
+    //             fmt::print("{}",bitmap[segment.virtual_address() + i]);
+    //             empty_bits += (bitmap[segment.virtual_address()+i]==0 ) ? 1 : 0; // On ajoute si il est empty
+    //         }
+    //         fmt::println("   | end address {:#x} ", segment.virtual_address()+segment.virtual_size());
+    //         len_all_bits += segment.virtual_size();
+    //     }
+    // }
+    // fmt::println("Il y a {} d'addresses de code non couvertes par mon analyse sur {} addresses totales soit environ {}% de bits de code non couverts", empty_bits, len_all_bits, (empty_bits*100)/len_all_bits);
+     
+    //rd.print_CFGs();
     rd.print_dependencies_same_bb();
     fmt::println("\n___________________________\nOutil de Jack");
     rd.build_CFGs_triskel(good_name);
