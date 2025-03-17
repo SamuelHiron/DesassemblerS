@@ -175,6 +175,7 @@ struct RecursiveDescent {
 
     int build_CFGs_triskel(const std::string& good_name){
         int nb_graph = 0;
+        int nb_trop_grand = 0;
         for(auto &block: blocks){
             if(block.parents_id.size() == 0 || block.function_start){ // attention block parent ou function = root
                 //parcours des enfants pour choper tous les bb
@@ -182,17 +183,16 @@ struct RecursiveDescent {
                 std::vector<size_t> blocks_id;
                 size_t index_graph = 0;
                 find_every_successors(block.id, index_graph ,blocks_id, block_deja_vus); // On obtient tous les ids des blocks enfant de block
-                if(blocks_id.size() < 500){ 
-
+                if(blocks_id.size() < 125){//Evite un graph trop grand
                     auto renderer = triskel::make_svg_renderer();
                     auto builder  = triskel::make_layout_builder();
-
                     int num_insn  = 0;
                     // Create nodes for each block
+                    //fmt::print("\nLes nodes du graphe {} sont :\n", nb_graph);
                     for(auto index_block: blocks_id){
                         num_insn = 0;
-                        std::string oss = ""; //remplacer par fmt::format
-                        fmt::print("id : {} graphid: {}\n", index_block, block_deja_vus[index_block]);
+                        std::string oss; //remplacer par fmt::format
+                        //fmt::print("id : {} graphid: {}\n", index_block, block_deja_vus[index_block]);
                         if(index_block == block.id){
                             oss += "Root of the Graph\n";
                         }
@@ -202,24 +202,63 @@ struct RecursiveDescent {
                             num_insn++;
                         }
                         builder->make_node(*renderer, oss);
-                          // cleans any flag
                      }
-                    fmt::print("\nLes arretes sont :\n");
+                    //fmt::print("\nLes arretes du graphe {} sont :\n", nb_graph);
                     for (auto index_block: blocks_id) {
                         if(block.id == index_block || !blocks[index_block].function_start){
                             for (auto child_id : blocks[index_block].childs_id) {
-                                fmt::print("ids: {} -> {} donc graph_ids ", index_block, child_id);
-                                fmt::println("{} -> {}", block_deja_vus[index_block], block_deja_vus[child_id]);
+                                // fmt::print("ids: {} -> {} donc graph_ids ", index_block, child_id);
+                                // fmt::println("{} -> {}", block_deja_vus[index_block], block_deja_vus[child_id]);
                                 builder->make_edge(block_deja_vus[index_block], block_deja_vus[child_id]);
                             }
                         }
                     }
-                    fmt::println("End Graph \n");
+                    // fmt::println("End Graph {}\n", nb_graph);
                     std::string new_name = good_name + std::to_string(nb_graph) + ".svg";
                     auto layout = builder->build();
                     layout->render_and_save(*renderer, new_name);
                     nb_graph++;
-                }   
+                } else {
+                    auto renderer = triskel::make_svg_renderer();
+                    auto builder  = triskel::make_layout_builder();
+                    int num_insn  = 0;
+                    // Create nodes for each block
+                    fmt::println("\nLes nodes du graphe {} sont :", nb_graph);
+                    // for(size_t index_block=0; index_block <= block.childs_id.size(); index_block++){
+                    //     num_insn = 0;
+                    std::string oss; 
+                    fmt::println("Root too Big id : {} == {} graphid: {} ", block.id, blocks_id[0], block_deja_vus[block.id]);
+                    oss += "Root of the Graph Too Big \n";
+                    oss+= fmt::format("nb_enfants {} | nb de noeuds {}", block.childs_id.size(), blocks_id.size());
+                    oss += fmt::format("Block ID: {}\n", block.id);//index_block);
+                    for (const auto& insn : block.instructions){//index_block].instructions) {
+                        oss += fmt::format("{} {:#x}: {} {}\n", num_insn, insn->address, insn->mnemonic, insn->op_str);
+                        num_insn++;
+                    }
+                    builder->make_node(*renderer, oss);
+
+                    for(size_t i = 0; i< block.childs_id.size(); i++){
+                        fmt::print(" {} == {}  => graphid :{}  |", block.childs_id[i], blocks_id[i+1], block_deja_vus[blocks_id[i+1]]);
+                        std::string oss;
+                        oss += "Child root graph too big";
+                        for (const auto& insn : blocks[block.childs_id[i]].instructions){//index_block].instructions) {
+                            oss += fmt::format("{} {:#x}: {} {}\n", num_insn, insn->address, insn->mnemonic, insn->op_str);
+                            num_insn++;
+                        }
+                        builder->make_node(*renderer, oss);
+                        builder->make_edge(0, i+1);
+                    }
+                    
+                   
+                    fmt::print("\nLes arretes du graphe {} sont :\n", nb_graph); 
+                    // fmt::println("End Graph {}\n", nb_graph);
+                    std::string new_name = good_name + std::to_string(nb_graph) + ".svg";
+                    auto layout = builder->build();
+                    layout->render_and_save(*renderer, new_name);
+                    nb_graph++;
+                    nb_trop_grand++;
+                    fmt::println("\ngraphe pour root {} trop grand {}>=100\n Il y en a {}", block.id, blocks_id.size(), nb_trop_grand);
+                }  
             }
         }
         return 0;
