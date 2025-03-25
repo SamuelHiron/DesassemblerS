@@ -10,3 +10,5 @@ out_cfg/
 *.ini
 
 results/
+
+results.txt

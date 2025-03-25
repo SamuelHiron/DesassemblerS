@@ -63,30 +63,48 @@ struct BasicBlock {
     std::unordered_map<uint16_t, std::vector<Position_Registre>>
         unknown_regs_dependencies;
     std::unordered_map<size_t, Position_Value> known_regs;
+
     BasicBlock(size_t start_address)
-        : function_start(false),
-          id(current_id_block),
-          start_address(start_address),
-          end(false) {
+        : function_start{false},
+          id{current_id_block},
+          start_address{start_address},
+          end{false},
+          childs_id{},
+          parents_id{},
+          instructions{},
+          unknown_regs_dependencies{},
+          known_regs{}
+    {
         current_id_block++;
     }
+
     BasicBlock(size_t start_address, bool function_start)
-        : function_start(function_start),
-         id(current_id_block),
-         start_address(start_address),
-         end(false) {
+        : function_start{function_start},
+          id{current_id_block},
+          start_address{start_address},
+          end{false},
+          childs_id{},
+          parents_id{},
+          instructions{},
+          unknown_regs_dependencies{},
+          known_regs{} 
+    {
         current_id_block++;
     }
+
     BasicBlock(size_t start_address,
                std::vector<size_t> childs_id,
                std::vector<size_t> parents_id)
-        : function_start(false),
-          id(current_id_block),
-          start_address(start_address),
-          end(false),
-          childs_id(std::move(childs_id)),
-          parents_id(std::move(parents_id))
-           {
+        : function_start{false},
+          id{current_id_block},
+          start_address{start_address},
+          end{false},
+          childs_id{std::move(childs_id)},
+          parents_id{std::move(parents_id)},
+          instructions{},
+          unknown_regs_dependencies{},
+          known_regs{} 
+    {
         current_id_block++;
     }
 
@@ -775,10 +793,10 @@ int main(int argc, char** argv) {
     //         len_all_bits += segment.virtual_size();
     //     }
     // }
-    // fmt::println("Il y a {} d'addresses de code non couvertes par mon analyse sur {} addresses totales soit environ {}% de bits de code non couverts", empty_bits, len_all_bits, (empty_bits*100)/len_all_bits);
+    // fmt::println("Il y a {} d'addresses de code non couvertes par mon analyse sur {} addresses totales soit environ {}% de octets de code non couverts", empty_bits, len_all_bits, (empty_bits*100)/len_all_bits);
      
-    //rd.print_CFGs();
-    rd.print_dependencies_same_bb();
+    rd.print_CFGs();
+    // rd.print_dependencies_same_bb();
     fmt::println("\n___________________________\nOutil de Jack");
     rd.build_CFGs_triskel(good_name);
 
