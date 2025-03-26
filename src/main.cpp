@@ -20,7 +20,8 @@ std::unordered_map<size_t, u_int8_t>
 using InstructionPtr = std::shared_ptr<cs_insn>;
 int bloc_null        = 0;
 
-struct CSH {
+struct CSH 
+{
     csh handle;
 
     CSH() {  // Constructeur
@@ -42,17 +43,20 @@ struct CSH {
     }  // convertir implicitement un objet CSH en une référence de type csh&
 };
 
-struct Position_Registre {
+struct Position_Registre 
+{
     size_t position;
     uint16_t registre;
 };
 
-struct Position_Value {
+struct Position_Value 
+{
     size_t position;
     size_t value;  // peut etre une float
 };
 
-struct BasicBlock {
+struct BasicBlock 
+{
     bool function_start;
     size_t id;
     size_t start_address;
@@ -120,21 +124,40 @@ struct BasicBlock {
         }
         fmt::println("" );
         for (const auto& insn : instructions) {
-            fmt::print( "{:#x}: {} {}", insn->address, insn->mnemonic, insn->op_str);
+            fmt::println( "{:#x}: {} {}", insn->address, insn->mnemonic, insn->op_str);
         }
         if (instructions.empty()) {
             fmt::print(  "\n start_address: {0:#x}", start_address);
             fmt::print( "nombre de blocs dans le même état = ", bloc_null);
             bloc_null++;
         }
-        fmt::print("" );
+        fmt::println("" );
     }
+
+    void print_BasicBlock_investigate() const {
+        fmt::println( "{:#x}: {} {}       ----------debut block", instructions[0]->address, instructions[0]->mnemonic, instructions[0]->op_str);
+        for (size_t index_insn = 1; index_insn<instructions.size()-2; index_insn++) {
+            fmt::println( "{:#x}: {} {}       |", instructions[index_insn]->address, instructions[index_insn]->mnemonic, instructions[index_insn]->op_str);
+        }
+        if(instructions.size()>1){
+            fmt::println( "{:#x}: {} {}    -------fin block", instructions[instructions.size()-1]->address, instructions[instructions.size()-1]->mnemonic, instructions[instructions.size()-1]->op_str);
+        }
+        if (instructions.empty()) {
+            fmt::print(  "\n start_address: {0:#x}", start_address);
+            fmt::print( "nombre de blocs dans le même état = ", bloc_null);
+            bloc_null++;
+        }
+        fmt::println("" );
+    }
+
 };
 
 int replace_id(std::vector<size_t>& parents_id,
                size_t id_to_supress,
-               size_t id_to_add) {
-    for (size_t i = 0; i < parents_id.size(); i++) {
+               size_t id_to_add) 
+{
+    for (size_t i = 0; i < parents_id.size(); i++) 
+    {
         if (parents_id[i] == id_to_supress) {
             parents_id[i] = id_to_add;
         }
@@ -143,15 +166,18 @@ int replace_id(std::vector<size_t>& parents_id,
 }
 
 
-int fill_bitmap(std::unordered_map<size_t, size_t>& bitmap, size_t start_address, size_t size, size_t value) {
-    for(size_t address = start_address; address< start_address + size; address++){
+int fill_bitmap(std::unordered_map<size_t, size_t>& bitmap, size_t start_address, size_t size, size_t value) 
+{
+    for(size_t address = start_address; address< start_address + size; address++)
+    {
             bitmap[address] = value;
     }
  
     return 0;
 }
 
-struct RecursiveDescent {
+struct RecursiveDescent 
+{
     std::unordered_map<size_t, size_t> basic_block_start_address;
     std::unordered_map<size_t, size_t> addr2block;  // address already treated
     std::vector<BasicBlock> blocks;
@@ -186,7 +212,35 @@ struct RecursiveDescent {
         fmt::println( "\n__________________________________________\n\nFin de l'exploration");
         fmt::println( "Nombre de blocs trouvés: {}",  blocks.size());
         for (const auto& block : blocks) {
-            block.print_BasicBlock();
+            if(block.instructions.size()!= 0)
+            {
+                block.print_BasicBlock();
+            }
+        }
+        return 0;
+    }
+
+    int print_CFG_investigate()
+    {
+        fmt::println("_______________________________________________ \n\n investigate");
+        blocks[0].print_BasicBlock_investigate();
+        size_t last_address = blocks[0].instructions[blocks[0].instructions.size()-1]->address + blocks[0].instructions[blocks[0].instructions.size()-1]->size;
+        for(auto index_block=1; index_block<blocks.size()-1 ;index_block++)
+        {
+
+            if(blocks[index_block].instructions.size() !=0 )
+            {
+                if(last_address != blocks[index_block].start_address){
+                    fmt::println("{:#x} byte not disassembled", last_address);
+                }
+                while(last_address != blocks[index_block].start_address)
+                {
+                    fmt::print("0");
+                    last_address++;
+                }
+                blocks[index_block].print_BasicBlock_investigate();
+                last_address = blocks[index_block].instructions[blocks[index_block].instructions.size()-1]->address + blocks[index_block].instructions[blocks[index_block].instructions.size()-1]->size;
+            }
         }
         return 0;
     }
@@ -204,12 +258,15 @@ struct RecursiveDescent {
         return 0;
     }
 
-    int build_CFGs_triskel(const std::string& good_name){
+    int build_CFGs_triskel(const std::string& good_name)
+    {
         int nb_graph = 0;
         int nb_trop_grand = 0;
-        for(auto &block: blocks){
-            if(block.parents_id.size() == 0 || block.function_start){ // attention block parent ou function = root
-                fmt::println("block.parents_id.size = {},  block.function_start = {}", block.parents_id.size(), block.function_start);
+        for(auto &block: blocks)
+        {
+            if((block.parents_id.size() == 0 || block.function_start) && block.instructions.size() !=0)
+            { // attention block parent ou function = root
+                //fmt::println("block.parents_id.size = {},  block.function_start = {}", block.parents_id.size(), block.function_start);
                 //parcours des enfants pour choper tous les bb
                 std::unordered_map<size_t, size_t> block_deja_vus;
                 std::vector<size_t> blocks_id;
@@ -297,53 +354,68 @@ struct RecursiveDescent {
         return 0;
     }
 
-    int find_every_successors(const size_t & index_block, size_t &index_graph, std::vector<size_t> &blocks_id, std::unordered_map<size_t, size_t> &block_deja_vus){
-        if(!block_deja_vus.contains(index_block)){
+    int find_every_successors(const size_t & index_block, size_t &index_graph, std::vector<size_t> &blocks_id, std::unordered_map<size_t, size_t> &block_deja_vus)
+    {
+        if(!block_deja_vus.contains(index_block))
+        {
             blocks_id.push_back(index_block);
-            if (index_block >= blocks.size()) {
+            if (index_block >= blocks.size()) 
+            {
                 fmt::println(stderr, "Erreur: index_block hors limites: {}", index_block);
                 return -1;
             }
-            if(!blocks[index_block].function_start) {
+            if(!blocks[index_block].function_start) 
+            {
                 block_deja_vus[index_block] = index_graph;
-            } else {
+            } else 
+            {
                 return 0;
             }
             index_graph++;
         }
-        if (blocks[index_block].childs_id.size()== 0){
+        if (blocks[index_block].childs_id.size()== 0)
+        {
             return 0;
         }
-        for(const auto child_id : blocks[index_block].childs_id){
-            if (child_id >= blocks.size()) {
+        for(const auto child_id : blocks[index_block].childs_id)
+        {
+            if (child_id >= blocks.size()) 
+            {
                 fmt::println(stderr, "Erreur: index_block hors limites: {}", child_id);
                 return -1;
             }
-            if(!block_deja_vus.contains(child_id) && !blocks[child_id].function_start){
+            if(!block_deja_vus.contains(child_id) && !blocks[child_id].function_start)
+            {
                 find_every_successors(child_id, index_graph, blocks_id, block_deja_vus);
             }
         }
         return 0;
     }
 
-    int print_instruction_regs_RW(const InstructionPtr & insn) {
+    int print_instruction_regs_RW(const InstructionPtr & insn) 
+    {
         uint16_t regs_read[64]  = {0};
         uint16_t regs_write[64] = {0};
         uint8_t read_count      = 0;
         uint8_t write_count     = 0;
         fmt::print( "\nProcessing instruction: {} {}", insn->mnemonic, insn->op_str  );
         if (cs_regs_access(handle, insn.get(), regs_read, &read_count,
-                           regs_write, &write_count) == CS_ERR_OK) {
-            if (read_count > 0) {
+                           regs_write, &write_count) == CS_ERR_OK) 
+        {
+            if (read_count > 0) 
+            {
                 fmt::print( "\t| Registers read : ");
-                for (uint8_t i = 0; i < read_count; i++) {
+                for (uint8_t i = 0; i < read_count; i++) 
+                {
                     fmt::print("{} ",cs_reg_name(handle, regs_read[i]));
                 }
             }
 
-            if (write_count > 0) {
+            if (write_count > 0) 
+            {
                 fmt::print( " \t| Registers modified : ");
-                for (uint8_t i = 0; i < write_count; i++) {
+                for (uint8_t i = 0; i < write_count; i++) 
+                {
                     std::string regName = cs_reg_name(handle, regs_write[i]);
                     fmt::print( "{} ",  regName);
                 }
@@ -355,7 +427,8 @@ struct RecursiveDescent {
 
     int split_BasicBlock(size_t id_basic_bloc_to_split,
                          size_t split_address,
-                         size_t index_block_parent) {
+                         size_t index_block_parent) 
+    {
         std::vector<InstructionPtr> debut_split_instructions;
 
         auto block_successor =
@@ -382,16 +455,19 @@ struct RecursiveDescent {
         size_t i = 0;
         size_t j = 0;
         // les instructions
-        while (i < blocks[id_basic_bloc_to_split].instructions.size()) {
+        while (i < blocks[id_basic_bloc_to_split].instructions.size()) 
+        {
             if (blocks[id_basic_bloc_to_split].instructions[i]->address <
-                split_address) {
+                split_address) 
+            {
                 debut_split_instructions.push_back(
                     blocks[id_basic_bloc_to_split].instructions[i]);
                 instruction_RW_regs(
                     blocks[id_basic_bloc_to_split].instructions[i], i,
                     id_basic_bloc_to_split);
                 j++;
-            } else {
+            } else 
+            {
                 blocks[block_successor.id].instructions.push_back(
                     blocks[id_basic_bloc_to_split].instructions[i]);
                 instruction_RW_regs(
@@ -498,7 +574,7 @@ struct RecursiveDescent {
         uint16_t regs_write[64] = {0};
         uint8_t read_count      = 0;
         uint8_t write_count     = 0;            
-        print_instruction_regs_RW(insn);
+        //print_instruction_regs_RW(insn);
         if (cs_regs_access(handle, insn.get(), regs_read, &read_count,
                            regs_write, &write_count) == CS_ERR_OK) {
             bool no_read_unknown = true;  // Si le nombre d'inconnu de read = 0
@@ -564,8 +640,9 @@ struct RecursiveDescent {
     int explore_BasicBlock(const int index_block, std::unordered_map<size_t, size_t> &bitmap) {
         auto current_address = blocks[index_block].start_address;
         if (addr2block.contains(current_address)) {
-            //fmt::print( "Ce block {} a déjà vu cette addresse {}", addr2block[current_address],  current_address);
+            fmt::print( "Ce block {} a déjà vu cette addresse {}", addr2block[current_address],  current_address);
             blocks[index_block].end = true;  // dans le cas split d'un bloc déjà vu
+            // On pourrait changer les indices de tous les suivants en faisant -1 et sur tous les précédents en faisant enfants et ou parents id -1
         }
 
         int position_instruction = 0;                          // pour la position de l'instruction & ne pas aller trop loin je pourrai mettre zone RX
@@ -587,10 +664,11 @@ struct RecursiveDescent {
             auto insn = std::shared_ptr<cs_insn>{
                 raw_pointer, [](cs_insn* insn) { cs_free(insn, 1); }};
 
+            print_instruction_regs_RW(insn);
             instruction_RW_regs(insn, position_instruction, index_block);
             
-            print_unknown_regs_dependencies(blocks[index_block].unknown_regs_dependencies);
-            print_known_regs(blocks[index_block].known_regs);
+            //print_unknown_regs_dependencies(blocks[index_block].unknown_regs_dependencies);
+            //print_known_regs(blocks[index_block].known_regs);
             blocks[index_block].instructions.push_back(insn);  // on la stocke
             addr2block[current_address] =
                 blocks[index_block].id;  // on note qu'on a traité cette adresse
@@ -629,10 +707,10 @@ struct RecursiveDescent {
 
 
                 } else if (op0.type == X86_OP_MEM) {
-                    print_known_regs(blocks[index_block].known_regs);
-                    print_x86_op(op0);
+                    //print_known_regs(blocks[index_block].known_regs);
+                    //print_x86_op(op0);
                     auto op1 = insn->detail->x86.operands[1];
-                    print_x86_op(op1);
+                    //print_x86_op(op1);
                     size_t jmp_address = x86_find_block_address_op(op0, index_block);
                     fmt::println("jump address 0x{:x}", jmp_address);
                     bool far = true;
@@ -719,9 +797,11 @@ struct RecursiveDescent {
     }
 
 
+
 };
 
-static auto name_file_output(const int &argc, char ** &argv) -> std::string{
+static auto name_file_output(const int &argc, char ** &argv) -> std::string
+{
     std::string input_path = argv[1];  // Chemin du fichier donné en argument
     size_t found = input_path.find_last_of("/\\");
     std::string output_filename;
@@ -740,9 +820,13 @@ static auto name_file_output(const int &argc, char ** &argv) -> std::string{
     return output_filename;
 }
 
+bool compare_address_bb(const BasicBlock &block_a, const BasicBlock &block_b)
+{
+    return block_a.start_address < block_b.start_address;
+}
 
-
-int main(int argc, char** argv) {
+int main(int argc, char** argv) 
+{
     if (argc < 2) {
         fmt::print(stderr,"Usage: {} <binary> asm|C|", argv[0]);
         return 1;
@@ -778,27 +862,34 @@ int main(int argc, char** argv) {
     rd.find_CFGs_entrypoints();
     fmt::print(  "{} functions found \n",  rd.blocks.size() - 1  );
     rd.recursive_descent(bitmap);
-    fill_bitmap(bitmap, entrypoint, 1, 8);
-    // fmt::println("\n-------------------------------------\nBitmap Analysis");
-    // size_t empty_bits = 0;
-    // size_t len_all_bits = 0;
-    // for (const LIEF::ELF::Segment& segment : segments) {
-    //     if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) {
-    //         fmt::print("\nsegment start address {:#x}  |  ", segment.virtual_address());
-    //         for (size_t i = 0; i < segment.physical_size(); i++) {
-    //             fmt::print("{}",bitmap[segment.virtual_address() + i]);
-    //             empty_bits += (bitmap[segment.virtual_address()+i]==0 ) ? 1 : 0; // On ajoute si il est empty
-    //         }
-    //         fmt::println("   | end address {:#x} ", segment.virtual_address()+segment.virtual_size());
-    //         len_all_bits += segment.virtual_size();
-    //     }
-    // }
-    // fmt::println("Il y a {} d'addresses de code non couvertes par mon analyse sur {} addresses totales soit environ {}% de octets de code non couverts", empty_bits, len_all_bits, (empty_bits*100)/len_all_bits);
-     
-    rd.print_CFGs();
+    //rd.print_CFGs();
+    
+    
     // rd.print_dependencies_same_bb();
     fmt::println("\n___________________________\nOutil de Jack");
     rd.build_CFGs_triskel(good_name);
 
+
+    fmt::println("\n-------------------------------------\nBitmap Analysis");
+    size_t index_block = 0;
+    size_t empty_bits = 0;
+    size_t len_all_bits = 0;
+    std::sort(rd.blocks.begin(), rd.blocks.end(), compare_address_bb);
+    rd.print_CFG_investigate();
+    for (const LIEF::ELF::Segment& segment : segments) {
+        if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) {
+            for (size_t i = 1; i < segment.physical_size(); i++) {
+                if (bitmap[segment.virtual_address() + i] == 0) 
+                {
+                    empty_bits += 1; // On ajoute si il est empty
+                }
+                
+                
+            }
+            len_all_bits += segment.virtual_size();
+        }
+    }
+    fmt::println("Il y a {} d'addresses de code non couvertes par mon analyse sur {} addresses totales soit environ {}% de octets de code non couverts", empty_bits, len_all_bits, (empty_bits*100)/len_all_bits);
+ 
     return 0;
 }
