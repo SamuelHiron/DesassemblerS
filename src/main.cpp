@@ -13,6 +13,7 @@
 #include "LIEF/LIEF.hpp"
 #include "x86.h"
 #include <fmt/format.h>
+#include <fmt/core.h>
 
 size_t current_id_block;  // On en a besoin pour les 2 structs
 std::unordered_map<size_t, u_int8_t>
@@ -134,13 +135,22 @@ struct BasicBlock
         fmt::println("" );
     }
 
-    void print_BasicBlock_investigate() const {
-        fmt::println( "{:#x}: {} {}       ----------debut block", instructions[0]->address, instructions[0]->mnemonic, instructions[0]->op_str);
-        for (size_t index_insn = 1; index_insn<instructions.size()-2; index_insn++) {
-            fmt::println( "{:#x}: {} {}       |", instructions[index_insn]->address, instructions[index_insn]->mnemonic, instructions[index_insn]->op_str);
+    void print_BasicBlock_investigate() const 
+    {
+        // Determine the maximum width for each column
+        size_t maxAddressWidth = 10;
+        size_t maxMnemonicWidth = 10;
+        size_t maxOpStrWidth = 30;
+        if(instructions.size()==1){
+            fmt::println( "{:#0{}x}: {:<{}} {:<{}} ---------------debut/fin block", instructions[0]->address, maxAddressWidth, instructions[0]->mnemonic, maxMnemonicWidth, instructions[0]->op_str , maxOpStrWidth);
+            return;
+        }
+        fmt::println( "{:#0{}x}: {:<{}} {:<{}} ---------------debut block", instructions[0]->address, maxAddressWidth, instructions[0]->mnemonic, maxMnemonicWidth, instructions[0]->op_str , maxOpStrWidth);
+        for (size_t index_insn = 1; index_insn < instructions.size() - 1; index_insn++) {
+            fmt::println( "{:#0{}x}: {:<{}} {:<{}} |", instructions[index_insn]->address, maxAddressWidth, instructions[index_insn]->mnemonic, maxMnemonicWidth, instructions[index_insn]->op_str, maxOpStrWidth);
         }
         if(instructions.size()>1){
-            fmt::println( "{:#x}: {} {}    -------fin block", instructions[instructions.size()-1]->address, instructions[instructions.size()-1]->mnemonic, instructions[instructions.size()-1]->op_str);
+            fmt::println( "{:#0{}x}: {:<{}} {:<{}}  ---------------fin block", instructions[instructions.size()-1]->address, maxAddressWidth, instructions[instructions.size()-1]->mnemonic, maxMnemonicWidth-1, instructions[instructions.size()-1]->op_str, maxOpStrWidth);
         }
         if (instructions.empty()) {
             fmt::print(  "\n start_address: {0:#x}", start_address);
@@ -199,10 +209,10 @@ struct RecursiveDescent
         return 0;
     }
     
-    int recursive_descent(std::unordered_map<size_t, size_t>& bitmap){
+    int recursive_descent(std::unordered_map<size_t, size_t>& bitmap, std::string option){
         size_t index_block = 0;
         while (index_block != blocks.size()) {
-            explore_BasicBlock(index_block, bitmap);
+            explore_BasicBlock(index_block, bitmap, option);
             index_block++;
         }
         return 0;
@@ -222,21 +232,31 @@ struct RecursiveDescent
 
     int print_CFG_investigate()
     {
-        fmt::println("_______________________________________________ \n\n investigate");
+        fmt::println("_______________________________________________ \n\n investigate\n");
         blocks[0].print_BasicBlock_investigate();
         size_t last_address = blocks[0].instructions[blocks[0].instructions.size()-1]->address + blocks[0].instructions[blocks[0].instructions.size()-1]->size;
         for(auto index_block=1; index_block<blocks.size()-1 ;index_block++)
         {
-
             if(blocks[index_block].instructions.size() !=0 )
             {
                 if(last_address != blocks[index_block].start_address){
-                    fmt::println("{:#x} byte not disassembled", last_address);
+                    fmt::println("{:#x}  <====== Start address byte not disassembled !!!", last_address);
+                    fmt::print("{:x} ",binary_contents[last_address]);
                 }
+                size_t nb_zero_current_line = 1;
                 while(last_address != blocks[index_block].start_address)
                 {
-                    fmt::print("0");
+                    if(nb_zero_current_line %12 == 0){
+                        fmt::println("{:x} ",binary_contents[last_address]);
+                    } else {
+                        fmt::print("{:x} ",binary_contents[last_address]);
+                    }
+                    nb_zero_current_line++;
                     last_address++;
+                    if(last_address == blocks[index_block].start_address)
+                    {
+                        fmt::println("  <====== End");
+                    }
                 }
                 blocks[index_block].print_BasicBlock_investigate();
                 last_address = blocks[index_block].instructions[blocks[index_block].instructions.size()-1]->address + blocks[index_block].instructions[blocks[index_block].instructions.size()-1]->size;
@@ -245,7 +265,8 @@ struct RecursiveDescent
         return 0;
     }
 
-    int print_dependencies_same_bb(){
+    int print_dependencies_same_bb()
+    {
         fmt::print("\n_______________________________________________\n\n");
         fmt::println( "Analyse VSA:\n");
         for (size_t i = 0; i < blocks.size(); i++) {
@@ -499,7 +520,8 @@ struct RecursiveDescent
     // ajoute à mon vector de block un nouveau block commençant par next_address
     // et en mettant la connexion au parent de l'id de l'enfant. Le booléen far
     // permet de traiter si on saute à une addresse si on split un bloc
-    int init_next_bb(size_t next_address, size_t index_block_parent, bool far, bool function_start) {
+    int init_next_bb(size_t next_address, size_t index_block_parent, bool far, bool function_start) 
+    {
         if (!basic_block_start_address.contains(next_address) &&
             !addr2block.contains(
                 next_address)) {  // cas où l'adresse n'a jamais été
@@ -545,7 +567,8 @@ struct RecursiveDescent
 
     void print_unknown_regs_dependencies(
         const std::unordered_map<uint16_t, std::vector<Position_Registre>>&
-            unknown_regs_dependencies) {
+            unknown_regs_dependencies) 
+    {
         fmt::println("Dependencies:");
         for (const auto& pair : unknown_regs_dependencies) {
             uint16_t reg                                      = pair.first;
@@ -558,7 +581,8 @@ struct RecursiveDescent
     }
 
     void print_known_regs(
-        const std::unordered_map<size_t, Position_Value>& known_regs) {
+        const std::unordered_map<size_t, Position_Value>& known_regs) 
+        {
         fmt::println("Known regs:");
         for (const auto& pair : known_regs) {
             uint16_t reg = pair.first;
@@ -569,7 +593,8 @@ struct RecursiveDescent
 
     int instruction_RW_regs(const InstructionPtr& insn,
                             size_t position_instruction,
-                            const size_t index_block) {  // split bloc à traiter
+                            const size_t index_block) 
+    {  // split bloc à traiter
         uint16_t regs_read[64]  = {0};
         uint16_t regs_write[64] = {0};
         uint8_t read_count      = 0;
@@ -607,7 +632,8 @@ struct RecursiveDescent
 
 
 
-    size_t x86_get_reg_value(const InstructionPtr &insn, const size_t index_block, size_t position_instruction, size_t regs_write_value){ // A traiter
+    size_t x86_get_reg_value(const InstructionPtr &insn, const size_t index_block, size_t position_instruction, size_t regs_write_value)
+    { // A traiter
         size_t value = 0;
         fmt::println("Analyse Instruction mem value");
         if (insn->id == X86_INS_MOV){
@@ -637,7 +663,8 @@ struct RecursiveDescent
         return value;
     }
 
-    int explore_BasicBlock(const int index_block, std::unordered_map<size_t, size_t> &bitmap) {
+    int explore_BasicBlock(const int index_block, std::unordered_map<size_t, size_t> &bitmap, std::string option) 
+    {
         auto current_address = blocks[index_block].start_address;
         if (addr2block.contains(current_address)) {
             fmt::print( "Ce block {} a déjà vu cette addresse {}", addr2block[current_address],  current_address);
@@ -706,7 +733,7 @@ struct RecursiveDescent
                     }
 
 
-                } else if (op0.type == X86_OP_MEM) {
+                } else if (op0.type == X86_OP_MEM && option == "ON") {
                     //print_known_regs(blocks[index_block].known_regs);
                     //print_x86_op(op0);
                     auto op1 = insn->detail->x86.operands[1];
@@ -744,7 +771,8 @@ struct RecursiveDescent
     }
 
 
-    void print_x86_op(const cs_x86_op op){
+    void print_x86_op(const cs_x86_op op)
+    {
         if (op.type == X86_OP_MEM){
             fmt::println( " Plus DUR X86_OP_MEM => Détails instructions operand :");
             if (cs_reg_name(handle, op.mem.base)!= NULL){
@@ -805,12 +833,17 @@ static auto name_file_output(const int &argc, char ** &argv) -> std::string
     std::string input_path = argv[1];  // Chemin du fichier donné en argument
     size_t found = input_path.find_last_of("/\\");
     std::string output_filename;
-    if (argc == 3 && std::strcmp(argv[2], "asm") == 0){
+    fmt::println("comparaison importante = {}, {}", argv[3], input_path);
+    if (argc == 4 && std::strcmp(argv[3], "asm") == 0){
         output_filename = "./out_cfg/asm/" + input_path.substr(found + 1) + "_"; 
-    } else if(argc == 3 && std::strcmp(argv[2], "C") == 0){
+    } else if(argc == 4 && std::strcmp(argv[3], "C") == 0){
         output_filename = "./out_cfg/C/" + input_path.substr(found + 1)+"_"; 
-    } else if(argc == 3 && std::strcmp(argv[2], "distro") == 0){
+    } else if(argc == 4 && std::strcmp(argv[3], "Cpp") == 0){
+        output_filename = "./out_cfg/Cpp/" + input_path.substr(found + 1)+"_"; 
+    } else if(argc == 4 && std::strcmp(argv[3], "distro") == 0){
         output_filename = "./out_cfg/distro/" + input_path.substr(found + 1)+"_"; 
+    } else if(argc == 4 && std::strcmp(argv[3], "binutils") == 0){
+        output_filename = "./out_cfg/binutils/" + input_path.substr(found + 1)+"_"; 
     } else {
         output_filename = "./out_cfg/test/out"; 
     }
@@ -827,8 +860,8 @@ bool compare_address_bb(const BasicBlock &block_a, const BasicBlock &block_b)
 
 int main(int argc, char** argv) 
 {
-    if (argc < 2) {
-        fmt::print(stderr,"Usage: {} <binary> asm|C|", argv[0]);
+    if (argc < 3) {
+        fmt::println(stderr,"Usage: {} <binary> ON|OFF asm|C|Cpp|distro|nothing", argv[0]);
         return 1;
     }
 
@@ -838,7 +871,7 @@ int main(int argc, char** argv)
         LIEF::ELF::Parser::parse(argv[1]);
 
     if (!binary) {
-        fmt::print(stderr, "Failed to parse binary!");
+        fmt::print(stderr, "Failed to parse binary {}!", good_name);
         return 1;
     }
     const auto entrypoint = binary->entrypoint();
@@ -859,15 +892,16 @@ int main(int argc, char** argv)
     // Print binary type and entry point
     RecursiveDescent rd;
     rd.binary = std::move(binary);
+    std::string option = argv[2];
     rd.find_CFGs_entrypoints();
     fmt::print(  "{} functions found \n",  rd.blocks.size() - 1  );
-    rd.recursive_descent(bitmap);
+    rd.recursive_descent(bitmap, option);
     //rd.print_CFGs();
     
     
     // rd.print_dependencies_same_bb();
     fmt::println("\n___________________________\nOutil de Jack");
-    rd.build_CFGs_triskel(good_name);
+    //rd.build_CFGs_triskel(good_name);
 
 
     fmt::println("\n-------------------------------------\nBitmap Analysis");
@@ -889,7 +923,7 @@ int main(int argc, char** argv)
             len_all_bits += segment.virtual_size();
         }
     }
-    fmt::println("Il y a {} d'addresses de code non couvertes par mon analyse sur {} addresses totales soit environ {}% de octets de code non couverts", empty_bits, len_all_bits, (empty_bits*100)/len_all_bits);
+    fmt::println("{} d'addresses de code non couvertes sur {} => ~ {}% octets de code non couverts", empty_bits, len_all_bits, (empty_bits*100)/len_all_bits);
  
     return 0;
 }
