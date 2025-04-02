@@ -10,4 +10,5 @@ rm results/asm/*
 rm results/C/*
 rm results/Cpp/*
 rm results/distro/*
-rm results/binutils/*
+rm results/binutils/*/*
+

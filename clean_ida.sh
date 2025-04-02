@@ -1,0 +1,1 @@
+rm ../binaries/elf/*.*

@@ -230,39 +230,65 @@ struct RecursiveDescent
         return 0;
     }
 
-    int print_CFG_investigate()
+    size_t print_CFG_investigate(const std::vector<LIEF::ELF::Segment>& segments)
     {
         fmt::println("_______________________________________________ \n\n investigate\n");
-        blocks[0].print_BasicBlock_investigate();
-        size_t last_address = blocks[0].instructions[blocks[0].instructions.size()-1]->address + blocks[0].instructions[blocks[0].instructions.size()-1]->size;
-        for(auto index_block=1; index_block<blocks.size()-1 ;index_block++)
-        {
-            if(blocks[index_block].instructions.size() !=0 )
-            {
-                if(last_address != blocks[index_block].start_address){
-                    fmt::println("{:#x}  <====== Start address byte not disassembled !!!", last_address);
-                    fmt::print("{:x} ",binary_contents[last_address]);
-                }
-                size_t nb_zero_current_line = 1;
-                while(last_address != blocks[index_block].start_address)
-                {
-                    if(nb_zero_current_line %12 == 0){
-                        fmt::println("{:x} ",binary_contents[last_address]);
+        fmt::println("Il y a {} blocks", blocks.size());
+        size_t empty_bits = 0;
+        size_t len_all_bits = 0;
+        size_t bloc_last_address = blocks[0].instructions[blocks[0].instructions.size()-1]->address + blocks[0].instructions[blocks[0].instructions.size()-1]->size;
+        size_t index_current_bloc = 0;
+        size_t nb_zero_current_line = 0;
+        size_t next_start_address = blocks[0].start_address;
+        bool start_not_disass = true;
+        fmt::println("block {} start_address {:#x}", index_current_bloc, blocks[index_current_bloc].start_address);
+        for (const LIEF::ELF::Segment& segment : segments) {
+            if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) {
+                for (size_t index_segment = 0; index_segment < segment.physical_size(); index_segment++) {
+                    size_t current_address = segment.virtual_address() + index_segment; 
+                    if (current_address == blocks[index_current_bloc].start_address){ // on est sur du code connu
+                        blocks[index_current_bloc].print_BasicBlock_investigate();
+                        size_t bloc_last_address = blocks[index_current_bloc].instructions[blocks[index_current_bloc].instructions.size()-1]->address + blocks[index_current_bloc].instructions[blocks[index_current_bloc].instructions.size()-1]->size;
+                        current_address = bloc_last_address;
+                        start_not_disass = true;
+                        index_current_bloc++;
+                        while(index_current_bloc != blocks.size() && blocks[index_current_bloc].instructions.size()==0)
+                        {
+                            index_current_bloc++;
+                        } if (index_current_bloc == blocks.size()){
+                            index_current_bloc = 0;
+                        } else {
+                            next_start_address = blocks[index_current_bloc].start_address;
+                        }
+                        index_segment = bloc_last_address - segment.virtual_address()-1;
+                    } else if(start_not_disass) {
+                        empty_bits++;
+                        fmt::println("{:#x}  <====== Start address byte not disassembled !!!", current_address);
+                        fmt::print("{:x} ",binary_contents[current_address]);
+                        nb_zero_current_line = 2;
+                        start_not_disass = false;
+                    } else if (current_address + 1  == next_start_address) {
+                        fmt::print("{:x} ",binary_contents[current_address]);
+                        fmt::println("  <====== End\n");
                     } else {
-                        fmt::print("{:x} ",binary_contents[last_address]);
-                    }
-                    nb_zero_current_line++;
-                    last_address++;
-                    if(last_address == blocks[index_block].start_address)
-                    {
-                        fmt::println("  <====== End");
-                    }
+                        if(nb_zero_current_line %12 == 0){
+                            fmt::println("{:x} ",binary_contents[current_address]);
+                            nb_zero_current_line = 1;
+                        } else {
+                            if(nb_zero_current_line ==1 ){
+                                fmt::print("{:#x} ", current_address);
+                            }
+                            fmt::print("{:x} ",binary_contents[current_address]);
+                            nb_zero_current_line++;
+                        }
+                        empty_bits++;
+                    }                 
                 }
-                blocks[index_block].print_BasicBlock_investigate();
-                last_address = blocks[index_block].instructions[blocks[index_block].instructions.size()-1]->address + blocks[index_block].instructions[blocks[index_block].instructions.size()-1]->size;
+                len_all_bits += segment.virtual_size();
             }
         }
-        return 0;
+        fmt::println("\n{} d'addresses de code non couvertes sur {} => ~ {}% octets de code non couverts", empty_bits, len_all_bits, (empty_bits*100)/len_all_bits);
+        return empty_bits;
     }
 
     int print_dependencies_same_bb()
@@ -419,7 +445,7 @@ struct RecursiveDescent
         uint16_t regs_write[64] = {0};
         uint8_t read_count      = 0;
         uint8_t write_count     = 0;
-        fmt::print( "\nProcessing instruction: {} {}", insn->mnemonic, insn->op_str  );
+        // fmt::print( "\nProcessing instruction: {} {}", insn->mnemonic, insn->op_str  );
         if (cs_regs_access(handle, insn.get(), regs_read, &read_count,
                            regs_write, &write_count) == CS_ERR_OK) 
         {
@@ -635,7 +661,7 @@ struct RecursiveDescent
     size_t x86_get_reg_value(const InstructionPtr &insn, const size_t index_block, size_t position_instruction, size_t regs_write_value)
     { // A traiter
         size_t value = 0;
-        fmt::println("Analyse Instruction mem value");
+        //fmt::println("Analyse Instruction mem value");
         if (insn->id == X86_INS_MOV){
             auto op0 =insn->detail->x86.operands[0];
             auto op1 = insn->detail->x86.operands[1];
@@ -677,7 +703,7 @@ struct RecursiveDescent
             // pour etre sur refait pas une lecture de bloc
             
             addr2block[current_address] = index_block;
-            fmt::println( "Exploring address: {0:#x}",  current_address);  // On décode 1 instruction
+            // fmt::println( "Exploring address: {0:#x}",  current_address);  // On décode 1 instruction
             std::array<u_int8_t, 16> bytes;
             for (size_t i = 0; i < 16; i++) {
                 bytes[i] = binary_contents[current_address + i];
@@ -691,7 +717,7 @@ struct RecursiveDescent
             auto insn = std::shared_ptr<cs_insn>{
                 raw_pointer, [](cs_insn* insn) { cs_free(insn, 1); }};
 
-            print_instruction_regs_RW(insn);
+            //print_instruction_regs_RW(insn);
             instruction_RW_regs(insn, position_instruction, index_block);
             
             //print_unknown_regs_dependencies(blocks[index_block].unknown_regs_dependencies);
@@ -796,7 +822,8 @@ struct RecursiveDescent
         }            
     }
 
-    size_t x86_find_block_address_op(const cs_x86_op op, size_t index_block){
+    size_t x86_find_block_address_op(const cs_x86_op op, size_t index_block)
+    {
         // Base Register+(Index Register×Scale Factor)+Displacement
         size_t value = 0;
         if (cs_reg_name(handle, op.mem.base)!= NULL){ // Base Register
@@ -861,7 +888,7 @@ bool compare_address_bb(const BasicBlock &block_a, const BasicBlock &block_b)
 int main(int argc, char** argv) 
 {
     if (argc < 3) {
-        fmt::println(stderr,"Usage: {} <binary> ON|OFF asm|C|Cpp|distro|nothing", argv[0]);
+        fmt::println(stderr,"Usage: {} <binary> <optionMOV:ON|OFF> asm|C|Cpp|distro|nothing", argv[0]);
         return 1;
     }
 
@@ -871,13 +898,21 @@ int main(int argc, char** argv)
         LIEF::ELF::Parser::parse(argv[1]);
 
     if (!binary) {
-        fmt::print(stderr, "Failed to parse binary {}!", good_name);
+        fmt::println(stderr, "Failed to parse binary {}!", good_name);
         return 1;
     }
     const auto entrypoint = binary->entrypoint();
     fmt::println( "Entry Point: {0:#x}", entrypoint);
     std::unordered_map<size_t, size_t> bitmap; //to see if the analysis left out some bits
     const auto segments = binary->segments();
+
+        // Create a vector of Segment pointers
+    std::vector<LIEF::ELF::Segment> segmentPtrs;
+    for (const auto & segment : segments) {
+        segmentPtrs.push_back(segment);
+    }
+
+
     // Chargement du Binaire
     for (const LIEF::ELF::Segment& segment : segments) {
         if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) {
@@ -902,28 +937,15 @@ int main(int argc, char** argv)
     // rd.print_dependencies_same_bb();
     fmt::println("\n___________________________\nOutil de Jack");
     //rd.build_CFGs_triskel(good_name);
-
+    
+    
 
     fmt::println("\n-------------------------------------\nBitmap Analysis");
     size_t index_block = 0;
     size_t empty_bits = 0;
     size_t len_all_bits = 0;
     std::sort(rd.blocks.begin(), rd.blocks.end(), compare_address_bb);
-    rd.print_CFG_investigate();
-    for (const LIEF::ELF::Segment& segment : segments) {
-        if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) {
-            for (size_t i = 1; i < segment.physical_size(); i++) {
-                if (bitmap[segment.virtual_address() + i] == 0) 
-                {
-                    empty_bits += 1; // On ajoute si il est empty
-                }
-                
-                
-            }
-            len_all_bits += segment.virtual_size();
-        }
-    }
-    fmt::println("{} d'addresses de code non couvertes sur {} => ~ {}% octets de code non couverts", empty_bits, len_all_bits, (empty_bits*100)/len_all_bits);
- 
+
+    rd.print_CFG_investigate(segmentPtrs); //stats sur le CFG 
     return 0;
 }
