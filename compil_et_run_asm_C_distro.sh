@@ -1,59 +1,86 @@
 #!/bin/bash
 
+# Vérifier si les arguments nécessaires sont fournis
+if [ "$#" -ne 3 ]; then
+  echo "Usage: $0 <strip=ON|OFF> <OptionMOV=ON|OFF> <OptionPADD=ON|OFF>"
+  exit 1
+fi
+
+# Handle strip option
+if [ "$1" = "ON" ]; then
+  # Répertoire contenant les fichiers binaires ELF
+  BINARY_DIR="../binaries/elf_strip/"
+elif [ "$1" = "OFF" ]; then
+  # Répertoire contenant les fichiers binaires ELF
+  BINARY_DIR="../binaries/elf/"
+else
+  echo "Error: Argument strip must be ON or OFF."
+  exit 1
+fi
+
+# Vérifier si les arguments sont soit "ON" soit "OFF"
+if [ "$2" != "ON" ] && [ "$2" != "OFF" ]; then
+  echo "Error: Argument OptionMOV must be ON or OFF."
+  exit 1
+fi
+
+if [ "$3" != "ON" ] && [ "$3" != "OFF" ]; then
+  echo "Error: Argument OptionPADD must be ON or OFF."
+  exit 1
+fi
+
+# Si les arguments sont valides, continuer avec le reste du script
+echo "strip is set to $1"
+echo "OptionMOV is set to $2"
+echo "OptionPADD is set to $3"
+
+# Utiliser les arguments comme options pour la commande
+strip="$1"
+OptionMOV="$2"
+OptionPADD="$3"
+
 cmake --build build
 
-# OPTION MOV ON
-# Exécuter les commandes sur binaires d'assembleurs
-mkdir -p "results/asm/ON"
-build/desassam ../binaries/elf/jmp_imm ON asm > results/asm/ON/jmp_imm.txt
-build/desassam ../binaries/elf/jmp_reg ON asm > results/asm/ON/jmp_reg.txt
-build/desassam ../binaries/elf/data ON asm > results/asm/ON/data.txt
-build/desassam ../binaries/elf/jmp_in_same_bb ON asm > results/asm/ON/jmp_in_same_bb.txt
-build/desassam ../binaries/elf/jmp_in_other_bb ON asm > results/asm/ON/jmp_in_other_bb.txt
-build/desassam ../binaries/elf/bar ON asm > results/asm/ON/bar.txt
+# Commande à exécuter
+COMMAND="./build/desassam"
 
-# Exécuter les commandes sur binaires de C
-mkdir -p "results/C/ON"
-build/desassam ../binaries/elf/return0 ON C > results/C/ON/return0.txt
-build/desassam ../binaries/elf/if_function ON C > results/C/ON/if_function.txt 
-build/desassam ../binaries/elf/hello_world ON C > results/C/ON/hello_world.txt
-build/desassam ../binaries/elf/function_pointer ON C > results/C/ON/function_pointer.txt
-build/desassam ../binaries/elf/switch ON C > results/C/ON/switch.txt
+# Tableau des fichiers binaires à tester
+declare -A binaries
+binaries=(
+  ["asm"]="jmp_imm jmp_reg data jmp_in_same_bb jmp_in_other_bb bar"
+  ["C"]="return0 if_function hello_world_C function_pointer switch_lj switch_sj"
+  ["Cpp"]="exception methode_virtuelle"
+  ["Go"]="hello_world_Go"
+  ["Rust"]="hello_world_rust"
+)
 
-# Exécuter les commandes sur binaires de C
-mkdir -p "results/Cpp/ON"
-build/desassam ../binaries/elf/exception ON Cpp > results/Cpp/ON/exception.txt
-build/desassam ../binaries/elf/methode_virtuelle ON Cpp > results/Cpp/ON/methode_virtuelle.txt
+# Exécuter les commandes pour tous les types de binaires
+for BINARY_TYPE in "${!binaries[@]}"; do
+  # Répertoire pour enregistrer les résultats
+  RESULTS_DIR="results/$BINARY_TYPE/strip.$strip/MOV.$OptionMOV/PADD.$OptionPADD"
+  # Fichier CSV de résultats pour chaque catégorie
+  CSV_FILE="results/$BINARY_TYPE/strip.$strip.MOV.$OptionMOV.PADD.$OptionPADD.Results.csv"
+  # Créer le répertoire de résultats s'il n'existe pas
+  mkdir -p "$RESULTS_DIR"
+  # Créer l'en-tête du fichier CSV
+  echo "Filename,strip,OptionMOV,OptionPADD,code_address_recover(%),#bytes_in_code_segments_not_disass,#bytes_in_code_segments_total,#jmp_indirect" > "$CSV_FILE"
+  
+  for binary in ${binaries[$BINARY_TYPE]}; do
+    # Construire le chemin du fichier binaire
+    file_path="$BINARY_DIR/$binary"
+    # Exécuter la commande et rediriger la sortie vers le fichier de résultats
+    $COMMAND "$file_path" "$BINARY_TYPE" "$OptionMOV" "$OptionPADD" > "$RESULTS_DIR/$(basename "$binary").txt"
 
+    # Extraire la dernière ligne de l'output dans une variable
+    results=$(tail -n 1 "$RESULTS_DIR/$(basename "$binary").txt")
 
-# Exécuter les commandes sur distro 
-mkdir -p "results/distro/ON"
-build/desassam /bin/ls ON distro > results/distro/ON/ls.txt
+    # Extraire les valeurs des résultats
+    result1=$(echo "$results" | awk '{print $1}')
+    result2=$(echo "$results" | awk '{print $2}')
+    result3=$(echo "$results" | awk '{print $3}')
+    result4=$(echo "$results" | awk '{print $4}')
 
-
-# OPTION MOV OFF
-# Exécuter les commandes sur binaires d'assembleurs
-mkdir -p "results/asm/OFF"
-build/desassam ../binaries/elf/jmp_imm OFF asm > results/asm/OFF/jmp_imm.txt
-build/desassam ../binaries/elf/jmp_reg OFF asm > results/asm/OFF/jmp_reg.txt
-build/desassam ../binaries/elf/data OFF asm > results/asm/OFF/data.txt
-build/desassam ../binaries/elf/jmp_in_same_bb OFF asm > results/asm/OFF/jmp_in_same_bb.txt
-build/desassam ../binaries/elf/jmp_in_other_bb OFF asm > results/asm/OFF/jmp_in_other_bb.txt
-build/desassam ../binaries/elf/bar OFF asm > results/asm/OFF/bar.txt
-
-# Exécuter les commandes sur binaires de C
-mkdir -p "results/C/OFF"
-build/desassam ../binaries/elf/return0 OFF C > results/C/OFF/return0.txt
-build/desassam ../binaries/elf/if_function OFF C > results/C/OFF/if_function.txt
-build/desassam ../binaries/elf/hello_world OFF C > results/C/OFF/hello_world.txt
-build/desassam ../binaries/elf/function_pointer OFF C > results/C/OFF/function_pointer.txt
-build/desassam ../binaries/elf/switch OFF C > results/C/OFF/switch.txt
-
-# Exécuter les commandes sur binaires de C++
-mkdir -p "results/Cpp/OFF"
-build/desassam ../binaries/elf/exception OFF Cpp > results/Cpp/OFF/exception.txt
-build/desassam ../binaries/elf/methode_virtuelle OFF Cpp > results/Cpp/OFF/methode_virtuelle.txt
-
-# Exécuter les commandes sur distro
-mkdir -p "results/distro/OFF"
-build/desassam /bin/ls OFF distro > results/distro/OFF/ls.txt
+    # Ajouter les résultats au fichier CSV
+    echo "$(basename "$binary"),$strip,$OptionMOV,$OptionPADD,$result1,$result2,$result3,$result4" >> "$CSV_FILE"
+  done
+done

@@ -3,11 +3,14 @@
 #include <strings.h>
 #include <cstddef>
 #include <cstdio>
+#include <cstdio>
 #include <iostream>
 #include <string>
 #include <triskel/triskel.hpp>
 #include <unordered_map>
 #include <utility>
+#include "LIEF/Abstract/Section.hpp"
+#include "LIEF/ELF/Segment.hpp"
 #include "LIEF/Abstract/Section.hpp"
 #include "LIEF/ELF/Segment.hpp"
 #include "LIEF/LIEF.hpp"
@@ -19,7 +22,7 @@ size_t current_id_block;  // On en a besoin pour les 2 structs
 std::unordered_map<size_t, u_int8_t>
     binary_contents;  // On en a besoin aussi dans le main
 using InstructionPtr = std::shared_ptr<cs_insn>;
-int bloc_null        = 0;
+int block_null        = 0;
 
 struct CSH 
 {
@@ -80,7 +83,7 @@ struct BasicBlock
           unknown_regs_dependencies{},
           known_regs{}
     {
-        current_id_block++;
+        ++current_id_block;
     }
 
     BasicBlock(size_t start_address, bool function_start)
@@ -94,7 +97,7 @@ struct BasicBlock
           unknown_regs_dependencies{},
           known_regs{} 
     {
-        current_id_block++;
+        ++current_id_block;
     }
 
     BasicBlock(size_t start_address,
@@ -110,7 +113,7 @@ struct BasicBlock
           unknown_regs_dependencies{},
           known_regs{} 
     {
-        current_id_block++;
+        ++current_id_block;
     }
 
     void print_BasicBlock() const {
@@ -129,8 +132,8 @@ struct BasicBlock
         }
         if (instructions.empty()) {
             fmt::print(  "\n start_address: {0:#x}", start_address);
-            fmt::print( "nombre de blocs dans le même état = ", bloc_null);
-            bloc_null++;
+            fmt::print( "nombre de blocks dans le même état = ", block_null);
+            ++block_null;
         }
         fmt::println("" );
     }
@@ -142,11 +145,11 @@ struct BasicBlock
         size_t maxMnemonicWidth = 10;
         size_t maxOpStrWidth = 30;
         if(instructions.size()==1){
-            fmt::println( "{:#0{}x}: {:<{}} {:<{}} ---------------debut/fin block", instructions[0]->address, maxAddressWidth, instructions[0]->mnemonic, maxMnemonicWidth, instructions[0]->op_str , maxOpStrWidth);
+            fmt::println( "{:#0{}x}: {:<{}} {:<{}} ---------------debut/fin block\n", instructions[0]->address, maxAddressWidth, instructions[0]->mnemonic, maxMnemonicWidth, instructions[0]->op_str , maxOpStrWidth);
             return;
         }
         fmt::println( "{:#0{}x}: {:<{}} {:<{}} ---------------debut block", instructions[0]->address, maxAddressWidth, instructions[0]->mnemonic, maxMnemonicWidth, instructions[0]->op_str , maxOpStrWidth);
-        for (size_t index_insn = 1; index_insn < instructions.size() - 1; index_insn++) {
+        for (size_t index_insn = 1; index_insn < instructions.size() - 1; ++index_insn) {
             fmt::println( "{:#0{}x}: {:<{}} {:<{}} |", instructions[index_insn]->address, maxAddressWidth, instructions[index_insn]->mnemonic, maxMnemonicWidth, instructions[index_insn]->op_str, maxOpStrWidth);
         }
         if(instructions.size()>1){
@@ -154,19 +157,19 @@ struct BasicBlock
         }
         if (instructions.empty()) {
             fmt::print(  "\n start_address: {0:#x}", start_address);
-            fmt::print( "nombre de blocs dans le même état = ", bloc_null);
-            bloc_null++;
+            fmt::print( "nombre de blocks dans le même état = ", block_null);
+            ++block_null;
         }
         fmt::println("" );
     }
 
 };
 
-int replace_id(std::vector<size_t>& parents_id,
+int replace_id_triskel(std::vector<size_t>& parents_id,
                size_t id_to_supress,
                size_t id_to_add) 
 {
-    for (size_t i = 0; i < parents_id.size(); i++) 
+    for (size_t i = 0; i < parents_id.size(); ++i) 
     {
         if (parents_id[i] == id_to_supress) {
             parents_id[i] = id_to_add;
@@ -178,7 +181,7 @@ int replace_id(std::vector<size_t>& parents_id,
 
 int fill_bitmap(std::unordered_map<size_t, size_t>& bitmap, size_t start_address, size_t size, size_t value) 
 {
-    for(size_t address = start_address; address< start_address + size; address++)
+    for(size_t address = start_address; address< start_address + size; ++address)
     {
             bitmap[address] = value;
     }
@@ -198,29 +201,30 @@ struct RecursiveDescent
     int find_CFGs_entrypoints() {
         blocks.push_back({binary->entrypoint()});
         basic_block_start_address[binary->entrypoint()] = 1;
-
         // Iterate over symbols and print functions
         for (const auto& function : binary->functions()) {
             blocks.push_back({function.address()});
             basic_block_start_address[function.address()] =
                 current_id_block - 1;
-        //fmt::print(  "{} functions found \n",  blocks.size() - 1  );
+            fmt::println("function_address = {:#x}     function_size={:#x}", function.address(), function.size());
         }
+        fmt::print(  "{} functions found \n",  blocks.size() - 1  );
         return 0;
     }
     
-    int recursive_descent(std::unordered_map<size_t, size_t>& bitmap, std::string option){
+
+    int recursive_descent(std::unordered_map<size_t, size_t>& bitmap, std::string option, size_t & nb_jmp_indirect){
         size_t index_block = 0;
         while (index_block != blocks.size()) {
-            explore_BasicBlock(index_block, bitmap, option);
-            index_block++;
+            explore_BasicBlock(index_block, bitmap, option, nb_jmp_indirect);
+            ++index_block;
         }
         return 0;
     }
 
     int print_CFGs(){
         fmt::println( "\n__________________________________________\n\nFin de l'exploration");
-        fmt::println( "Nombre de blocs trouvés: {}",  blocks.size());
+        fmt::println( "Nombre de blocks trouvés: {}",  blocks.size());
         for (const auto& block : blocks) {
             if(block.instructions.size()!= 0)
             {
@@ -230,47 +234,113 @@ struct RecursiveDescent
         return 0;
     }
 
-    size_t print_CFG_investigate(const std::vector<LIEF::ELF::Segment>& segments)
+    // inputs: segments et bb on veut déterminer le code manquant, pq, et s'en prémunir
+    size_t print_CFG_investigate(const std::vector<LIEF::ELF::Segment>& segments, const std::string & optionPadding)
     {
-        fmt::println("_______________________________________________ \n\n investigate\n");
-        fmt::println("Il y a {} blocks", blocks.size());
-        size_t empty_bits = 0;
-        size_t len_all_bits = 0;
-        size_t bloc_last_address = blocks[0].instructions[blocks[0].instructions.size()-1]->address + blocks[0].instructions[blocks[0].instructions.size()-1]->size;
-        size_t index_current_bloc = 0;
+        fmt::println("_______________________________________________ \n\n investigate\nIl y a {} blocks\n", blocks.size());
+
+        size_t total_empty_bytes = 0;
+        size_t current_bytes_empty = 0;
+        size_t nb_zeros_padding = 0; // pour essayer virer padding
+        bool padding_potential = false;
+        size_t len_all_bytes = 0;
+        size_t block_last_address = blocks[0].instructions[blocks[0].instructions.size()-1]->address + blocks[0].instructions[blocks[0].instructions.size()-1]->size;
+        size_t index_current_block = 0;
         size_t nb_zero_current_line = 0;
         size_t next_start_address = blocks[0].start_address;
         bool start_not_disass = true;
-        fmt::println("block {} start_address {:#x}", index_current_bloc, blocks[index_current_bloc].start_address);
-        for (const LIEF::ELF::Segment& segment : segments) {
-            if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) {
-                for (size_t index_segment = 0; index_segment < segment.physical_size(); index_segment++) {
-                    size_t current_address = segment.virtual_address() + index_segment; 
-                    if (current_address == blocks[index_current_bloc].start_address){ // on est sur du code connu
-                        blocks[index_current_bloc].print_BasicBlock_investigate();
-                        size_t bloc_last_address = blocks[index_current_bloc].instructions[blocks[index_current_bloc].instructions.size()-1]->address + blocks[index_current_bloc].instructions[blocks[index_current_bloc].instructions.size()-1]->size;
-                        current_address = bloc_last_address;
+        fmt::println("block {} start_address {:#x}", index_current_block, blocks[index_current_block].start_address);
+        for (const LIEF::ELF::Segment& segment : segments) 
+        {
+            if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) 
+            {
+                size_t start_unknown_address = segment.virtual_address();
+
+                for (size_t index_segment = 0; index_segment < segment.physical_size(); ++index_segment) 
+                {
+                    size_t current_address = segment.virtual_address() + index_segment;
+
+                    if (current_address == blocks[index_current_block].start_address)
+                    { // on est sur du code connu
+                        blocks[index_current_block].print_BasicBlock_investigate();
+                        size_t block_last_address = blocks[index_current_block].instructions[blocks[index_current_block].instructions.size()-1]->address + blocks[index_current_block].instructions[blocks[index_current_block].instructions.size()-1]->size;
+                        current_address = block_last_address;
                         start_not_disass = true;
-                        index_current_bloc++;
-                        while(index_current_bloc != blocks.size() && blocks[index_current_bloc].instructions.size()==0)
+                        ++index_current_block;
+                        padding_potential = false;
+                        
+                        while(index_current_block != blocks.size() && blocks[index_current_block].instructions.size()==0)
                         {
-                            index_current_bloc++;
-                        } if (index_current_bloc == blocks.size()){
-                            index_current_bloc = 0;
+                            ++index_current_block;
+                        } 
+                        if (index_current_block == blocks.size()){
+                            index_current_block = 0; 
+                            if(optionPadding=="ON")
+                            {
+                                start_unknown_address = current_address;
+                                if (segment.virtual_size() + segment.virtual_address() - current_address < 20 ){
+                                    padding_potential = true;
+                                    nb_zeros_padding = 0;
+                                } else if (segment.virtual_size() + segment.virtual_address() - current_address < 7 )
+                                {                                    
+                                    padding_potential = true;
+                                    nb_zeros_padding = 3;
+                                } else 
+                                {
+                                    nb_zeros_padding = 0;
+                                }
+                            }
+                            next_start_address = segment.virtual_size() + segment.virtual_address();
                         } else {
-                            next_start_address = blocks[index_current_bloc].start_address;
+                            next_start_address = blocks[index_current_block].start_address;
+                            //On veut etre sur que ce soit peut d'addresses
+                            if(optionPadding=="ON")
+                            {
+                                start_unknown_address = current_address;
+                                if (next_start_address - current_address< 7){
+                                    padding_potential = true;
+                                    nb_zeros_padding = 3;
+                                } else if (next_start_address - current_address < 20)
+                                {
+                                    padding_potential = true;
+                                    nb_zeros_padding = 0;
+                                } else 
+                                {
+                                    nb_zeros_padding = 0;
+                                }
+                            }
                         }
-                        index_segment = bloc_last_address - segment.virtual_address()-1;
+                        index_segment = block_last_address - segment.virtual_address()-1;
+                        current_bytes_empty = 0;
+                        //fmt::println("next_start_address - current_address = {}", next_start_address - current_address);
                     } else if(start_not_disass) {
-                        empty_bits++;
-                        fmt::println("{:#x}  <====== Start address byte not disassembled !!!", current_address);
+                        fmt::println("{:#x}  <========= Start address byte not disassembled !!!", current_address);
+                        // fmt::println("next_start_address {:#x}", next_start_address);
+                        recover_insn_from_bytes_cs(next_start_address - current_address, current_address, 0);
                         fmt::print("{:x} ",binary_contents[current_address]);
                         nb_zero_current_line = 2;
                         start_not_disass = false;
+                        ++current_bytes_empty;
+                        if(binary_contents[current_address] == 0){
+                            ++nb_zeros_padding; // on compte le nombre de 0
+                        }
                     } else if (current_address + 1  == next_start_address) {
-                        fmt::print("{:x} ",binary_contents[current_address]);
-                        fmt::println("  <====== End\n");
+                        fmt::println("{:x} ",binary_contents[current_address]);
+                        //fmt::println("start_unknown_address:{:#x} next_start_address:{:#x}, nb_zero_padding:{}, (start_unknown_address-next_start_address)/2 {},  padding_potential {}",start_unknown_address, next_start_address, nb_zeros_padding, (next_start_address-start_unknown_address)/2, padding_potential);
+                        if(optionPadding=="ON" && ((nb_zeros_padding >= 2 && padding_potential) || (next_start_address-start_unknown_address)/2 < nb_zeros_padding))
+                        {
+                            fmt::print("<<<PADDING bytes not added>>>");
+                        } else 
+                        {
+                            total_empty_bytes += current_bytes_empty;
+                            fmt::print("~~~~~~~~~~~~~ unknown code ~~~~~~~~~~~~~~");
+                        }
+                        fmt::println("  <============= End\n");
                     } else {
+                        if(binary_contents[current_address] == 0){
+                            ++nb_zeros_padding; // on compte le nombre de 0
+                        }
+                        ++current_bytes_empty;
                         if(nb_zero_current_line %12 == 0){
                             fmt::println("{:x} ",binary_contents[current_address]);
                             nb_zero_current_line = 1;
@@ -279,23 +349,25 @@ struct RecursiveDescent
                                 fmt::print("{:#x} ", current_address);
                             }
                             fmt::print("{:x} ",binary_contents[current_address]);
-                            nb_zero_current_line++;
+                            ++nb_zero_current_line;
                         }
-                        empty_bits++;
-                    }                 
+                    }
                 }
-                len_all_bits += segment.virtual_size();
+                len_all_bytes += segment.virtual_size();
             }
         }
-        fmt::println("\n{} d'addresses de code non couvertes sur {} => ~ {}% octets de code non couverts", empty_bits, len_all_bits, (empty_bits*100)/len_all_bits);
-        return empty_bits;
+        fmt::print("\n{} {} {}", (100*(len_all_bytes- total_empty_bytes))/len_all_bytes, total_empty_bytes, len_all_bytes);
+        //fmt::println("\n{} d'addresses de code non couvertes sur {} => ~ {}% octets de code non couverts", total_empty_bytes, len_all_bytes, (total_empty_bytes*100)/len_all_bits);
+        return 0;
     }
 
     int print_dependencies_same_bb()
     {
         fmt::print("\n_______________________________________________\n\n");
         fmt::println( "Analyse VSA:\n");
-        for (size_t i = 0; i < blocks.size(); i++) {
+        for (size_t i = 0; i < blocks.size(); ++i) {
+            fmt::println("\nblock & depencies");
+            blocks[i].print_BasicBlock();
             fmt::println("\nBlock {} Dependencies:", i);
             print_unknown_regs_dependencies(
                 blocks[i].unknown_regs_dependencies);
@@ -321,6 +393,8 @@ struct RecursiveDescent
                 find_every_successors(block.id, index_graph ,blocks_id, block_deja_vus); // On obtient tous les ids des blocks enfant de block
                 if(blocks_id.size() < 127){//Evite un graph trop grand
                     fmt::println("root_block address = {} & nb_graph {}", block.start_address, nb_graph);
+                if(blocks_id.size() < 127){//Evite un graph trop grand
+                    fmt::println("root_block address = {} & nb_graph {}", block.start_address, nb_graph);
                     auto renderer = triskel::make_svg_renderer();
                     auto builder  = triskel::make_layout_builder();
                     int num_insn  = 0;
@@ -336,7 +410,7 @@ struct RecursiveDescent
                         oss += fmt::format("Block ID: {}\n", index_block);
                         for (const auto& insn : blocks[index_block].instructions) {
                             oss += fmt::format("{} {:#x}: {} {}\n", num_insn, insn->address, insn->mnemonic, insn->op_str);
-                            num_insn++;
+                            ++num_insn;
                         }
                         builder->make_node(*renderer, oss);
                      }
@@ -354,14 +428,15 @@ struct RecursiveDescent
                     std::string new_name = good_name + std::to_string(nb_graph) + ".svg";
                     auto layout = builder->build();
                     layout->render_and_save(*renderer, new_name);
-                    nb_graph++;
+                    ++nb_graph;
                 } else {
                     auto renderer = triskel::make_svg_renderer();
                     auto builder  = triskel::make_layout_builder();
                     int num_insn  = 0;
                     // Create nodes for each block
                     // fmt::println("\nLes nodes du graphe {} sont :", nb_graph);
-                    // for(size_t index_block=0; index_block <= block.childs_id.size(); index_block++){
+                    // for(size_t index_block=0; index_block <= block.childs_id.size(); ++index_block){
+                    // for(size_t index_block=0; index_block <= block.childs_id.size(); ++index_block){
                     //     num_insn = 0;
                     std::string oss; 
                     // fmt::println("Root too Big id : {} == {} graphid: {} ", block.id, blocks_id[0], block_deja_vus[block.id]);
@@ -370,17 +445,18 @@ struct RecursiveDescent
                     // oss += fmt::format("Block ID: {}\n", block.id);//index_block);
                     for (const auto& insn : block.instructions){//index_block].instructions) {
                         oss += fmt::format("{} {:#x}: {} {}\n", num_insn, insn->address, insn->mnemonic, insn->op_str);
-                        num_insn++;
+                        ++num_insn;
                     }
                     builder->make_node(*renderer, oss);
 
-                    for(size_t i = 0; i< block.childs_id.size(); i++){
+                    for(size_t i = 0; i< block.childs_id.size(); ++i){
+                    for(size_t i = 0; i< block.childs_id.size(); ++i){
                         // fmt::print(" {} == {}  => graphid :{}  |", block.childs_id[i], blocks_id[i+1], block_deja_vus[blocks_id[i+1]]);
                         std::string oss;
                         oss += "Child root graph too big";
                         for (const auto& insn : blocks[block.childs_id[i]].instructions){//index_block].instructions) {
                             oss += fmt::format("{} {:#x}: {} {}\n", num_insn, insn->address, insn->mnemonic, insn->op_str);
-                            num_insn++;
+                            ++num_insn;
                         }
                         builder->make_node(*renderer, oss);
                         builder->make_edge(0, i+1);
@@ -392,13 +468,15 @@ struct RecursiveDescent
                     std::string new_name = good_name + std::to_string(nb_graph) + ".svg";
                     auto layout = builder->build();
                     layout->render_and_save(*renderer, new_name);
-                    nb_graph++;
-                    nb_trop_grand++;
+                    ++nb_graph;
+                    ++nb_trop_grand;
                     fmt::println("\ngraphe pour root {} trop grand {}>=100\n Il y en a {}", block.id, blocks_id.size(), nb_trop_grand);
                 }  
             }
         }
         return 0;
+            }
+        }
     }
 
     int find_every_successors(const size_t & index_block, size_t &index_graph, std::vector<size_t> &blocks_id, std::unordered_map<size_t, size_t> &block_deja_vus)
@@ -418,7 +496,7 @@ struct RecursiveDescent
             {
                 return 0;
             }
-            index_graph++;
+            ++index_graph;
         }
         if (blocks[index_block].childs_id.size()== 0)
         {
@@ -452,7 +530,7 @@ struct RecursiveDescent
             if (read_count > 0) 
             {
                 fmt::print( "\t| Registers read : ");
-                for (uint8_t i = 0; i < read_count; i++) 
+                for (uint8_t i = 0; i < read_count; ++i) 
                 {
                     fmt::print("{} ",cs_reg_name(handle, regs_read[i]));
                 }
@@ -461,7 +539,7 @@ struct RecursiveDescent
             if (write_count > 0) 
             {
                 fmt::print( " \t| Registers modified : ");
-                for (uint8_t i = 0; i < write_count; i++) 
+                for (uint8_t i = 0; i < write_count; ++i) 
                 {
                     std::string regName = cs_reg_name(handle, regs_write[i]);
                     fmt::print( "{} ",  regName);
@@ -472,7 +550,7 @@ struct RecursiveDescent
         return 0;
     }
 
-    int split_BasicBlock(size_t id_basic_bloc_to_split,
+    int split_BasicBlock(size_t id_basic_block_to_split,
                          size_t split_address,
                          size_t index_block_parent) 
     {
@@ -480,64 +558,64 @@ struct RecursiveDescent
 
         auto block_successor =
             BasicBlock{split_address,
-                       blocks[id_basic_bloc_to_split].childs_id,
+                       blocks[id_basic_block_to_split].childs_id,
                        {index_block_parent}};  // création d'un nouveau bloc
-        blocks[id_basic_bloc_to_split].known_regs.clear();
-        blocks[id_basic_bloc_to_split].unknown_regs_dependencies.clear();
+        blocks[id_basic_block_to_split].known_regs.clear();
+        blocks[id_basic_block_to_split].unknown_regs_dependencies.clear();
         // le nouveau block
-        if (blocks[id_basic_bloc_to_split].id !=
+        if (blocks[id_basic_block_to_split].id !=
             index_block_parent) {  // si il n'est pas son propre parent
             block_successor.parents_id.push_back(
-                blocks[id_basic_bloc_to_split].id);
+                blocks[id_basic_block_to_split].id);
         }
         basic_block_start_address[split_address] =
             block_successor
-                .id;  // pour garder la 1ere adresse d'un bloc associée à son id
+                .id;  // pour garder la 1ere adresse d'un block associée à son id
         blocks.push_back(block_successor);
         if (index_block_parent ==
-            id_basic_bloc_to_split) {  // si il est son propre parent
+            id_basic_block_to_split) {  // si il est son propre parent
             blocks[block_successor.id].childs_id.push_back(block_successor.id);
         }
 
         size_t i = 0;
         size_t j = 0;
         // les instructions
-        while (i < blocks[id_basic_bloc_to_split].instructions.size()) 
+        while (i < blocks[id_basic_block_to_split].instructions.size()) 
         {
-            if (blocks[id_basic_bloc_to_split].instructions[i]->address <
+            if (blocks[id_basic_block_to_split].instructions[i]->address <
                 split_address) 
             {
                 debut_split_instructions.push_back(
-                    blocks[id_basic_bloc_to_split].instructions[i]);
+                    blocks[id_basic_block_to_split].instructions[i]);
                 instruction_RW_regs(
-                    blocks[id_basic_bloc_to_split].instructions[i], i,
-                    id_basic_bloc_to_split);
-                j++;
+                    blocks[id_basic_block_to_split].instructions[i], i,
+                    id_basic_block_to_split);
+                ++j;
             } else 
             {
                 blocks[block_successor.id].instructions.push_back(
-                    blocks[id_basic_bloc_to_split].instructions[i]);
+                    blocks[id_basic_block_to_split].instructions[i]);
                 instruction_RW_regs(
-                    blocks[id_basic_bloc_to_split].instructions[i], i - j,
+                    blocks[id_basic_block_to_split].instructions[i], i - j,
                     block_successor.id);
             }
-            i++;
+            ++i;
         }
 
         // le block split
-        blocks[id_basic_bloc_to_split].instructions = debut_split_instructions;
+        blocks[id_basic_block_to_split].instructions = debut_split_instructions;
         // for (auto insn : debut_split_instructions) {
         //     fmt::print( "{:#x} {} {}", insn->address, insn->mnemonic, insn->op_str);
         // }
         for (auto id_child :
-             blocks[id_basic_bloc_to_split]
+             blocks[id_basic_block_to_split]
                  .childs_id) {  // on adapte les parents_id de ses enfants
-            replace_id(blocks[id_child].parents_id, id_basic_bloc_to_split,
+            replace_id_triskel(blocks[id_child].parents_id, id_basic_block_to_split,
                        block_successor.id);
         }
-        blocks[id_basic_bloc_to_split].childs_id.clear();
-        blocks[id_basic_bloc_to_split].childs_id.push_back(block_successor.id);
-        if (id_basic_bloc_to_split != index_block_parent) {
+        blocks[id_basic_block_to_split].childs_id.clear();
+        blocks[id_basic_block_to_split].childs_id.push_back(block_successor.id);
+        if (id_basic_block_to_split != index_block_parent) {
             blocks[index_block_parent].childs_id.push_back(block_successor.id);
         }
         return 0;
@@ -560,10 +638,10 @@ struct RecursiveDescent
                                      // associée à son id
             blocks[index_block_parent].childs_id.push_back(
                 block_successor.id);  // on ajoute l'id de l'enfant à la liste
-                                      // des enfants du bloc parent
+                                      // des enfants du block parent
             block_successor.parents_id.push_back(
                 index_block_parent);  // on ajoute l'id du parent à la liste des
-                                      // parents du bloc enfant
+                                      // parents du block enfant
             blocks.push_back(block_successor);
         } else if (basic_block_start_address.contains(
                        next_address)) {  // cas où l'adresse est
@@ -572,7 +650,7 @@ struct RecursiveDescent
                                          // été traitée
             blocks[index_block_parent].childs_id.push_back(
                 basic_block_start_address[next_address]);  // on ajoute l'id du
-                                                           // bloc existant à la
+                                                           // block existant à la
                                                            // liste des
                                                            // successeurs de ce
                                                            // bloc
@@ -581,12 +659,12 @@ struct RecursiveDescent
                     index_block_parent);  // sa position dans le vector est
                                           // aussi son id
         } else if (far) {  // cas où l'adresse est déjà traitée
-            auto id_basic_bloc_to_split =
-                addr2block[next_address];  // Problème ici Bloc à split
+            auto id_basic_block_to_split =
+                addr2block[next_address];  // Problème ici block à split
             size_t split_address =
                 next_address;  // renommage pour que cela soit plus clair
-            //fmt::print( "bloc à split est n° {0:d} à l'adresse {0:#x}", id_basic_bloc_to_split, split_address);
-            split_BasicBlock(id_basic_bloc_to_split, split_address, index_block_parent); // Interogation call ?
+            //fmt::print( "block à split est n° {0:d} à l'adresse {0:#x}", id_basic_block_to_split, split_address);
+            split_BasicBlock(id_basic_block_to_split, split_address, index_block_parent); // Interogation call ?
         }
         return 0;
     }
@@ -620,7 +698,7 @@ struct RecursiveDescent
     int instruction_RW_regs(const InstructionPtr& insn,
                             size_t position_instruction,
                             const size_t index_block) 
-    {  // split bloc à traiter
+    {  // split block à traiter
         uint16_t regs_read[64]  = {0};
         uint16_t regs_write[64] = {0};
         uint8_t read_count      = 0;
@@ -631,23 +709,20 @@ struct RecursiveDescent
             bool no_read_unknown = true;  // Si le nombre d'inconnu de read = 0
             if (write_count > 0) {
                 // on voit si on est  capable de résoudre la dépendance
-                for (uint8_t k = 0; k < write_count; k++) {
-                    for (uint8_t l = 0; l < read_count; l++) {
-                        if (!blocks[index_block].known_regs.contains(
-                                regs_read[l])) {
+                for (uint8_t k = 0; k < write_count; ++k) {
+                    for (uint8_t l = 0; l < read_count; ++l) {
+                        if (!blocks[index_block].known_regs.contains(regs_read[l])) {
                             blocks[index_block]
                                 .unknown_regs_dependencies[regs_write[k]]
-                                .push_back(
-                                    {position_instruction, regs_read[l]});
+                                .push_back({position_instruction, regs_read[l]});
+                            blocks[index_block].known_regs.erase(regs_write[k]); // on supprime le fait qu'on connaissait la valeur
                             no_read_unknown = false;
                         }
                     }
                     if (no_read_unknown) { // si on est capable on update
                         size_t value = x86_get_reg_value(insn, index_block, position_instruction,regs_write[k]); // cas où float et pas déterminable avec instruction
-                        if (blocks[index_block].unknown_regs_dependencies.contains(
-                                regs_write[k])) {
-                            blocks[index_block].unknown_regs_dependencies.erase(
-                                regs_write[k]);
+                        if (blocks[index_block].unknown_regs_dependencies.contains(regs_write[k])) {
+                            blocks[index_block].unknown_regs_dependencies.erase(regs_write[k]);
                         }
                     }
                 }
@@ -685,16 +760,52 @@ struct RecursiveDescent
             } 
         }
         blocks[index_block].known_regs[regs_write_value] = {position_instruction, value};
-        fmt::println("\n");
+        //fmt::println("\n");
         return value;
     }
 
-    int explore_BasicBlock(const int index_block, std::unordered_map<size_t, size_t> &bitmap, std::string option) 
+    // 0 to get as much instruction to decode as possible
+    std::shared_ptr<cs_insn> recover_insn_from_bytes_cs(const size_t& len_to_disassemble, size_t current_address, const size_t& nb_instr_to_decode)
+    {
+        std::vector<uint8_t> bytes(len_to_disassemble);
+        for (size_t i = 0; i < len_to_disassemble; ++i) {
+            bytes[i] = binary_contents[current_address + i];
+        }
+        cs_insn* raw_pointer;
+        size_t count = cs_disasm(handle, bytes.data(), bytes.size(),
+                                 current_address, nb_instr_to_decode, &raw_pointer);
+        std::shared_ptr<cs_insn> insn{};
+        if(nb_instr_to_decode == 1){ // cas recursive descent
+            assert(count == 1);  // On s'occupe d'une instruction à la fois et
+                                 // ça c'est bien passé
+                                 // 
+            insn = std::shared_ptr<cs_insn>{raw_pointer, [=](cs_insn* insn) { cs_free(insn, nb_instr_to_decode); }};
+        } 
+        else { // cas linear sweep on a pas besoin de l'instruction après
+            if (count > 0) {
+                size_t j;
+                for (j = 0; j < count; ++j) {
+                    fmt::println(" {:#x}, {}, {}", raw_pointer[j].address, raw_pointer[j].mnemonic,
+                            raw_pointer[j].op_str);
+                }
+                cs_free(raw_pointer, count);
+            } else{
+                fmt::println("ERROR: Failed to disassemble given code!\n");
+            }
+        }
+        
+
+        
+        return insn;
+    }
+
+
+    int explore_BasicBlock(const size_t index_block, std::unordered_map<size_t, size_t> &bitmap, std::string optionMOV, size_t& nb_jmp_indirect) 
     {
         auto current_address = blocks[index_block].start_address;
         if (addr2block.contains(current_address)) {
-            fmt::print( "Ce block {} a déjà vu cette addresse {}", addr2block[current_address],  current_address);
-            blocks[index_block].end = true;  // dans le cas split d'un bloc déjà vu
+            //fmt::print( "Ce block {} a déjà vu cette addresse {}", addr2block[current_address],  current_address);
+            blocks[index_block].end = true;  // dans le cas split d'un block déjà vu
             // On pourrait changer les indices de tous les suivants en faisant -1 et sur tous les précédents en faisant enfants et ou parents id -1
         }
 
@@ -704,30 +815,20 @@ struct RecursiveDescent
             
             addr2block[current_address] = index_block;
             // fmt::println( "Exploring address: {0:#x}",  current_address);  // On décode 1 instruction
-            std::array<u_int8_t, 16> bytes;
-            for (size_t i = 0; i < 16; i++) {
-                bytes[i] = binary_contents[current_address + i];
-            }
-            cs_insn* raw_pointer;
-            size_t count = cs_disasm(handle, bytes.data(), bytes.size(),
-                                     current_address, 1, &raw_pointer);
-            assert(count == 1);  // On s'occupe d'une instruction à la fois et
-                                 // ça c'est bien passé
+                        
+            // On chope l'instruction, elle fait au max 16 octets, on fait 1 instruction à la fois
+            auto insn = recover_insn_from_bytes_cs(16, current_address, 1);
 
-            auto insn = std::shared_ptr<cs_insn>{
-                raw_pointer, [](cs_insn* insn) { cs_free(insn, 1); }};
-
-            //print_instruction_regs_RW(insn);
+            // On update les dépendances
             instruction_RW_regs(insn, position_instruction, index_block);
-            
             //print_unknown_regs_dependencies(blocks[index_block].unknown_regs_dependencies);
             //print_known_regs(blocks[index_block].known_regs);
+
             blocks[index_block].instructions.push_back(insn);  // on la stocke
-            addr2block[current_address] =
-                blocks[index_block].id;  // on note qu'on a traité cette adresse
-            auto next_address =
-                insn->address + insn->size;  // on prépare la prochaine adresse
-            fill_bitmap(bitmap, insn->address, insn->size, 1);
+            addr2block[current_address] = blocks[index_block].id;  // on note qu'on a traité cette adresse
+            auto next_address = insn->address + insn->size;  // on prépare la prochaine adresse
+            fill_bitmap(bitmap, insn->address, insn->size, 1); // On ajoute à l'adresse de l'instruction
+
             if (cs_insn_group(handle, insn.get(), CS_GRP_CALL) ||
                 cs_insn_group(handle, insn.get(), CS_GRP_JUMP)) {
                 bool function_start = false;
@@ -742,13 +843,14 @@ struct RecursiveDescent
                                         // suivante au vector de cfg
                 }
 
-                // le bloc loin
+                // le block loin
                 const auto& op0 = insn->detail->x86.operands[0];
                 if (op0.type == X86_OP_IMM) {  // cas où l'instruction contient
                                               // l'adresse de l'appel
                                               // init_next_bb(static_cast<size_t>(op0.imm),
                                               // index_block, far);
 
+                    //fmt::print( "{0:#x} X86_OP_IMM", op0.imm);
                     //fmt::print( "{0:#x} X86_OP_IMM", op0.imm);
                     bool far = true;
                     if (cs_insn_group(handle, insn.get(), CS_GRP_CALL)) {
@@ -758,23 +860,32 @@ struct RecursiveDescent
                         init_next_bb(static_cast<size_t>(op0.imm), index_block, far, function_start);
                     }
 
-
-                } else if (op0.type == X86_OP_MEM && option == "ON") {
+                } else if (op0.type == X86_OP_MEM && optionMOV == "ON") {
                     //print_known_regs(blocks[index_block].known_regs);
                     //print_x86_op(op0);
                     auto op1 = insn->detail->x86.operands[1];
                     //print_x86_op(op1);
                     size_t jmp_address = x86_find_block_address_op(op0, index_block);
-                    fmt::println("jump address 0x{:x}", jmp_address);
+                    //fmt::println("jump address 0x{:x}", jmp_address);
                     bool far = true;
                     if (cs_insn_group(handle, insn.get(), CS_GRP_CALL)) {
                         function_start = true;
                     }
                     if(op1.type == X86_OP_INVALID && jmp_address != 0 && (next_address != jmp_address || mandatory_jump) ){
                         init_next_bb(jmp_address, index_block, far, function_start);
+                    }else {
+                        //fmt::println("X86_OP_MEM");
+                        ++nb_jmp_indirect;
+                        //fmt::println("#jmp_indirect= {}", nb_jmp_indirect);
                     }
+                } else if (op0.type == X86_OP_MEM) {// l'optionMOV est désactivé
+                    //fmt::println("X86_OP_MEM");
+                    ++nb_jmp_indirect;
+                    //fmt::println("#jmp_indirect= {}", nb_jmp_indirect);
                 } else if (op0.type == X86_OP_REG) {
-                    fmt::print( "  X86_OP_REG");
+                    //fmt::print( "  X86_OP_REG");
+                    ++nb_jmp_indirect;
+                    //fmt::println("#jmp_indirect= {}", nb_jmp_indirect);
                 }
                 // fmt::print( "CALL ou JUMP"  );
             } else if (cs_insn_group(handle, insn.get(), CS_GRP_RET) ||
@@ -790,7 +901,7 @@ struct RecursiveDescent
                     index_block);
                 break;
             }
-            position_instruction++;
+            ++position_instruction;
         }
 
         return 0;
@@ -861,15 +972,19 @@ static auto name_file_output(const int &argc, char ** &argv) -> std::string
     size_t found = input_path.find_last_of("/\\");
     std::string output_filename;
     fmt::println("comparaison importante = {}, {}", argv[3], input_path);
-    if (argc == 4 && std::strcmp(argv[3], "asm") == 0){
+    if (argc == 4 && std::strcmp(argv[2], "asm") == 0){
         output_filename = "./out_cfg/asm/" + input_path.substr(found + 1) + "_"; 
-    } else if(argc == 4 && std::strcmp(argv[3], "C") == 0){
+    } else if(argc == 4 && std::strcmp(argv[2], "C") == 0){
         output_filename = "./out_cfg/C/" + input_path.substr(found + 1)+"_"; 
-    } else if(argc == 4 && std::strcmp(argv[3], "Cpp") == 0){
+    } else if(argc == 4 && std::strcmp(argv[2], "Cpp") == 0){
         output_filename = "./out_cfg/Cpp/" + input_path.substr(found + 1)+"_"; 
-    } else if(argc == 4 && std::strcmp(argv[3], "distro") == 0){
+    } else if(argc == 4 && std::strcmp(argv[2], "Go") == 0){
+        output_filename = "./out_cfg/Go/" + input_path.substr(found + 1)+"_"; 
+    } else if(argc == 4 && std::strcmp(argv[2], "Rust") == 0){
+        output_filename = "./out_cfg/Rust/" + input_path.substr(found + 1)+"_"; 
+    }else if(argc == 4 && std::strcmp(argv[2], "distro") == 0){
         output_filename = "./out_cfg/distro/" + input_path.substr(found + 1)+"_"; 
-    } else if(argc == 4 && std::strcmp(argv[3], "binutils") == 0){
+    } else if(argc == 4 && std::strcmp(argv[2], "binutils") == 0){
         output_filename = "./out_cfg/binutils/" + input_path.substr(found + 1)+"_"; 
     } else {
         output_filename = "./out_cfg/test/out"; 
@@ -887,10 +1002,12 @@ bool compare_address_bb(const BasicBlock &block_a, const BasicBlock &block_b)
 
 int main(int argc, char** argv) 
 {
-    if (argc < 3) {
-        fmt::println(stderr,"Usage: {} <binary> <optionMOV:ON|OFF> asm|C|Cpp|distro|nothing", argv[0]);
+    if (argc < 4) {
+        fmt::println(stderr,"Usage: {} <binary> asm|C|Cpp|Go|Rust|distro|nothing <optionMOV:ON|OFF> <optionPadding<ON|OFF> ", argv[0]);
         return 1;
     }
+
+    fmt::println( "binary:{}  ,  optionMOV:{}   ,   optionPad:{}", argv[1], argv[3], argv[4]);
 
     std::string good_name = name_file_output(argc, argv);
     // Parse the ELF binary
@@ -912,40 +1029,39 @@ int main(int argc, char** argv)
         segmentPtrs.push_back(segment);
     }
 
-
     // Chargement du Binaire
-    for (const LIEF::ELF::Segment& segment : segments) {
-        if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) {
-            for (size_t i = 0; i < segment.physical_size(); i++) {
+    for (const LIEF::ELF::Segment& segment : segments) 
+    {
+        if ((segment.flags() & LIEF::ELF::Segment::FLAGS::X) == LIEF::ELF::Segment::FLAGS::X) 
+        {
+            for (size_t i = 0; i < segment.physical_size(); ++i) {
                 binary_contents[segment.virtual_address() + i] =
                     segment.content()[i];
             }
             fmt::println("Code Segment : start address={:#x}, end address={:#x}", segment.virtual_address(), segment.virtual_address() + segment.virtual_size());
             fill_bitmap(bitmap, segment.virtual_address(), segment.virtual_size(), 0);
-       }
+        }
     }
+    
     // Print binary type and entry point
     RecursiveDescent rd;
     rd.binary = std::move(binary);
-    std::string option = argv[2];
+    const std::string optionMov = argv[3];
+    const std::string optionPadding = argv[4];
     rd.find_CFGs_entrypoints();
-    fmt::print(  "{} functions found \n",  rd.blocks.size() - 1  );
-    rd.recursive_descent(bitmap, option);
+    size_t nb_jmp_indirect = 0;
+    rd.recursive_descent(bitmap, optionMov, nb_jmp_indirect);
     //rd.print_CFGs();
     
     
-    // rd.print_dependencies_same_bb();
+    //rd.print_dependencies_same_bb();
     fmt::println("\n___________________________\nOutil de Jack");
     //rd.build_CFGs_triskel(good_name);
     
-    
-
     fmt::println("\n-------------------------------------\nBitmap Analysis");
-    size_t index_block = 0;
-    size_t empty_bits = 0;
-    size_t len_all_bits = 0;
     std::sort(rd.blocks.begin(), rd.blocks.end(), compare_address_bb);
 
-    rd.print_CFG_investigate(segmentPtrs); //stats sur le CFG 
+    rd.print_CFG_investigate(segmentPtrs, optionPadding); //stats sur le CFG 
+    fmt::println(" {}",nb_jmp_indirect);
     return 0;
 }
