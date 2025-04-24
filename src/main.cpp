@@ -18,7 +18,6 @@
 #include <fmt/format.h>
 #include <fmt/core.h>
 
-size_t current_id_block;  // On en a besoin pour les 2 structs
 std::unordered_map<size_t, u_int8_t>
     binary_contents;  // On en a besoin aussi dans le main
 using InstructionPtr = std::shared_ptr<cs_insn>;
@@ -72,9 +71,10 @@ struct BasicBlock
         unknown_regs_dependencies;
     std::unordered_map<size_t, Position_Value> known_regs;
 
+
     BasicBlock(size_t start_address)
         : function_start{false},
-          id{current_id_block},
+          id{generate_id_block()},
           start_address{start_address},
           end{false},
           childs_id{},
@@ -82,13 +82,11 @@ struct BasicBlock
           instructions{},
           unknown_regs_dependencies{},
           known_regs{}
-    {
-        ++current_id_block;
-    }
+    {}
 
     BasicBlock(size_t start_address, bool function_start)
         : function_start{function_start},
-          id{current_id_block},
+          id{generate_id_block()},
           start_address{start_address},
           end{false},
           childs_id{},
@@ -96,15 +94,13 @@ struct BasicBlock
           instructions{},
           unknown_regs_dependencies{},
           known_regs{} 
-    {
-        ++current_id_block;
-    }
+    {}
 
     BasicBlock(size_t start_address,
                std::vector<size_t> childs_id,
                std::vector<size_t> parents_id)
         : function_start{false},
-          id{current_id_block},
+          id{generate_id_block()},
           start_address{start_address},
           end{false},
           childs_id{std::move(childs_id)},
@@ -112,10 +108,14 @@ struct BasicBlock
           instructions{},
           unknown_regs_dependencies{},
           known_regs{} 
-    {
-        ++current_id_block;
-    }
+    {}
 
+    size_t generate_id_block()
+    {
+        static size_t current_id_block = 0;
+        return current_id_block++; // makes copy of  current_id_block, increments the real current_id_block, then returns the value in the copy
+    }
+    
     void print_BasicBlock() const {
         fmt::print("Basic Block n° {}", id);
         fmt::print(" | Enfants de :");
@@ -203,9 +203,10 @@ struct RecursiveDescent
         basic_block_start_address[binary->entrypoint()] = 1;
         // Iterate over symbols and print functions
         for (const auto& function : binary->functions()) {
-            blocks.push_back({function.address()});
+            auto block = BasicBlock{function.address()};
+            blocks.push_back(block);
             basic_block_start_address[function.address()] =
-                current_id_block - 1;
+                block.id;
             fmt::println("function_address = {:#x}     function_size={:#x}", function.address(), function.size());
         }
         fmt::print(  "{} functions found \n",  blocks.size() - 1  );
