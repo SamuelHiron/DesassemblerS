@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <triskel/triskel.hpp>
 #include <unordered_map>
 #include <utility>
@@ -17,6 +18,7 @@
 #include "x86.h"
 #include <fmt/format.h>
 #include <fmt/core.h>
+#include <fstream>
 
 std::unordered_map<size_t, u_int8_t>
     binary_contents;  // On en a besoin aussi dans le main
@@ -963,6 +965,35 @@ struct RecursiveDescent
 
     }
 
+    size_t enrich_by_fuzz(const std::string& good_name)
+    {
+        fmt::println("good_name = {}", good_name);
+        auto addresses_file = "./addresses/" + good_name+".addresses";
+        std::ifstream file(addresses_file);
+
+        if(!file.is_open())
+        {
+            fmt::println("No fuzzing file available");
+            return 1;
+        }
+        int nb_bb_en_plus_grace_fuzz = 0;
+        std::string address_line; //one address by line
+        while(std::getline(file, address_line))
+        {
+            size_t address = std::stoul(address_line, nullptr, 16); // Assuming the address is in hexadecimal format
+            if (!addr2block.contains(address)) 
+            {
+                auto block = BasicBlock{address};
+                blocks.push_back(block);
+                basic_block_start_address[address] =
+                block.id;
+                ++nb_bb_en_plus_grace_fuzz;
+            }
+        }
+        fmt::println("Le fuzzing a permis d'avoir {} bbs en +", nb_bb_en_plus_grace_fuzz);
+        return 0;
+    }
+
 
 
 };
@@ -1003,12 +1034,12 @@ bool compare_address_bb(const BasicBlock &block_a, const BasicBlock &block_b)
 
 int main(int argc, char** argv) 
 {
-    if (argc < 4) {
-        fmt::println(stderr,"Usage: {} <binary> asm|C|Cpp|Go|Rust|distro|nothing <optionMOV:ON|OFF> <optionPadding<ON|OFF> ", argv[0]);
+    if (argc < 6) {
+        fmt::println(stderr,"Usage: {} <binary> asm|C|Cpp|Go|Rust|distro|nothing <1_optionMOV:ON|OFF> <2_optionPadding<ON|OFF> <3_optionHelpFuzzing<ON|OFF>", argv[0]);
         return 1;
     }
 
-    fmt::println( "binary:{}  ,  optionMOV:{}   ,   optionPad:{}", argv[1], argv[3], argv[4]);
+    fmt::println( "binary:{}  ,  optionMOV:{}   ,   optionPad:{}, optionAideFuzzing:{}", argv[1], argv[3], argv[4], argv[5]);
 
     std::string good_name = name_file_output(argc, argv);
     // Parse the ELF binary
@@ -1054,9 +1085,18 @@ int main(int argc, char** argv)
     rd.recursive_descent(bitmap, optionMov, nb_jmp_indirect);
     //rd.print_CFGs();
     
+    const std::string optionHelpFuzzing = argv[5];
+    if(optionHelpFuzzing == "ON")
+    {
+        std::string input_path = argv[1];  // Chemin du fichier donné en argument
+        size_t found = input_path.find_last_of("/\\");
+        auto binary_name = input_path.substr(found + 1);
+        rd.enrich_by_fuzz(binary_name);
+        rd.recursive_descent(bitmap, optionMov, nb_jmp_indirect);
+    }
     
     //rd.print_dependencies_same_bb();
-    fmt::println("\n___________________________\nOutil de Jack");
+    // fmt::println("\n___________________________\nOutil de Jack");
     //rd.build_CFGs_triskel(good_name);
     
     fmt::println("\n-------------------------------------\nBitmap Analysis");

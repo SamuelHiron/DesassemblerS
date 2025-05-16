@@ -3,7 +3,7 @@
 makefile
 
 build/
-
+addresses*/
 out_cfg/
 
 *.csv
