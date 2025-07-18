@@ -19,6 +19,15 @@
 #include <fmt/format.h>
 #include <fmt/core.h>
 #include <fstream>
+#include <llvm/Object/ObjectFile.h>
+#include <llvm/Object/Binary.h>
+#include <llvm/Object/ELF.h>
+#include <llvm/DebugInfo/DWARF/DWARFContext.h>
+#include <llvm/DebugInfo/DWARF/DWARFCompileUnit.h>
+#include <llvm/DebugInfo/DWARF/DWARFDebugLine.h>
+#include <llvm/Support/Error.h>
+#include <llvm/Support/raw_ostream.h>
+
 
 std::unordered_map<size_t, u_int8_t>
     binary_contents;  // On en a besoin aussi dans le main
@@ -195,6 +204,8 @@ struct RecursiveDescent
 {
     std::unordered_map<size_t, size_t> basic_block_start_address;
     std::unordered_map<size_t, size_t> addr2block;  // address already treated
+    std::unordered_map<size_t, size_t> entrypoints;  // address already treated
+
     std::vector<BasicBlock> blocks;
     std::unique_ptr<LIEF::ELF::Binary> binary;
 
@@ -209,12 +220,76 @@ struct RecursiveDescent
             blocks.push_back(block);
             basic_block_start_address[function.address()] =
                 block.id;
+            entrypoints[function.address()]=1;
             fmt::println("function_address = {:#x}     function_size={:#x}", function.address(), function.size());
         }
         fmt::print(  "{} functions found \n",  blocks.size() - 1  );
         return 0;
     }
-    
+
+
+
+
+    void readDwarfLines(const std::string &binary_path, bool try_add_address) {
+        auto binaryOrErr = llvm::object::ObjectFile::createObjectFile(binary_path);
+        if (!binaryOrErr) {
+            llvm::errs() << "Error opening file: " << llvm::toString(binaryOrErr.takeError()) << "\n";
+            return;
+        }
+
+        llvm::object::OwningBinary<llvm::object::ObjectFile> owningBinary = std::move(*binaryOrErr);
+        llvm::object::ObjectFile *obj = owningBinary.getBinary();
+
+        auto dwarf_ctx = llvm::DWARFContext::create(*obj);
+
+        for (const std::unique_ptr<llvm::DWARFUnit> &cu : dwarf_ctx->compile_units()) {
+            if (!cu) continue;
+
+            const llvm::DWARFDebugLine::LineTable *line_table = dwarf_ctx->getLineTableForUnit(cu.get());
+            if (!line_table) continue;
+
+            fmt::print("CU at offset {:#x} has {} files and {} lines\n",
+                    cu->getOffset(),
+                    line_table->Prologue.FileNames.size(),
+                    line_table->Rows.size());
+
+            for (const auto &row : line_table->Rows) {
+                if (!row.IsStmt)
+                    continue;
+
+                if (row.File == 0 || row.File > line_table->Prologue.FileNames.size())
+                    continue;
+
+                const auto &file_entry = line_table->Prologue.FileNames[row.File - 1];
+                auto expectedName = file_entry.Name.getAsCString();
+                if (!expectedName) {
+                    llvm::errs() << "Error getting filename string: " << llvm::toString(expectedName.takeError()) << "\n";
+                    continue;
+                }
+                std::string file_name = *expectedName;
+                uint64_t addr = row.Address.Address;
+                if(entrypoints[addr] == 1)
+                {
+                    continue;
+                }
+                // 🔹 Ajout du basic block pour cette adresse DWARF
+                if (try_add_address){
+                    BasicBlock block(addr);
+                    blocks.push_back(block);
+                    basic_block_start_address[addr] = block.id;
+                }
+
+
+                fmt::print("  [DWARF] {:#x} -> {}:{}\n", 
+                        addr, file_name, row.Line);
+                entrypoints[addr] = 1;
+            }
+        }
+
+    }
+
+
+        
 
     int recursive_descent(std::unordered_map<size_t, size_t>& bitmap, std::string option, size_t & nb_jmp_indirect){
         size_t index_block = 0;
@@ -1081,6 +1156,7 @@ int main(int argc, char** argv)
     const std::string optionMov = argv[3];
     const std::string optionPadding = argv[4];
     rd.find_CFGs_entrypoints();
+    rd.readDwarfLines(argv[1], false);
     size_t nb_jmp_indirect = 0;
     rd.recursive_descent(bitmap, optionMov, nb_jmp_indirect);
     //rd.print_CFGs();

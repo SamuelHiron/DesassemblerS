@@ -51,13 +51,32 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(LIEF)
 
+# ---- LLVM ----
+
+find_package(LLVM REQUIRED CONFIG)
+
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+target_include_directories(desassam PRIVATE ${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
+
+execute_process(
+  COMMAND llvm-config --libs --system-libs DebugInfoDWARF Support
+  OUTPUT_VARIABLE LLVM_LIBS
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+string(REPLACE " " ";" LLVM_LIBS_LIST ${LLVM_LIBS})
 
 target_link_libraries(desassam PRIVATE 
     triskel
     LIEF::LIEF
     ${CAPSTONE_LIBRARIES}
     fmt::fmt
-)# link the executable to the LIEF library, format library and capstone
+
+    ${LLVM_LIBS_LIST}
+)
 
 
 # target_compile_options(desassam PRIVATE 
